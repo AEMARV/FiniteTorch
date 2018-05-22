@@ -55,7 +55,7 @@ class StaticNet(nn.Module):
 				pad = layer_opts['pad']
 				pad = StaticNet.evalpad(pad)
 				layer_list += nn.MaxPool2d(kernel_size=ksize,stride=stride,padding=pad)
-			elif layer_string is 'maxpool':
+			elif layer_string is 'avgpool':
 				ksize = layer_opts['r'].int()
 				stride = layer_opts['stride'].int()
 				pad = layer_opts['pad']
@@ -64,16 +64,6 @@ class StaticNet(nn.Module):
 			else:
 				raise('Undefined Layer: ' + layer_string)
 
-	@staticmethod
-	def parse_layer_opts(layer_string):
-		temp = layer_string.split('|')
-		layer_opts_string = temp[1]
-		layer_opts_list = layer_opts_string.split(',')
-		layer_opts = {}
-		for param_value in layer_opts_list:
-			param_value_list = param_value.split(':')
-			layer_opts[param_value_list[0]] = param_value_list[1]
-		return layer_opts
 
 	def num_flat_features(self, x):
 		size = x.size()[1:]  # all dimensions except the batch dimension
@@ -81,3 +71,6 @@ class StaticNet(nn.Module):
 		for s in size:
 			num_features *= s
 		return num_features
+class NetOpts(object):
+	def __init__(self, modelstring=None):
+		self.modelstring = modelstring
