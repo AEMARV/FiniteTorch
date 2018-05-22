@@ -1,0 +1,9 @@
+Results/
+data/
+Archived_Results/
+PreprocessData/
+.idea/
+*.pyc
+.gitignore~
+*.gz
+
