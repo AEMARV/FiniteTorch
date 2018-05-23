@@ -1,5 +1,9 @@
 from parser.staticnets import StaticNet
-def get_model_module(model_name,opts):
-	model_string = locals()[model_name]()
-	module = StaticNet(model_string, opts)
-	return module,opts
+from typing import Tuple
+from models.realmodels import *
+from optstructs import *
+
+def get_model_module(model_name:str) -> Tuple[StaticNet,allOpts]:
+	opts = globals()[model_name]()
+	module = StaticNet(opts.netopts)
+	return module, opts
