@@ -1,7 +1,8 @@
 from definition import *
-
-
-def quick_cifar(opts):
+from optstructs import *
+import torch
+import torch.nn
+def quick_cifar():
 	model_string = ''
 	nl = 'relu'
 	d = '->'
@@ -15,9 +16,16 @@ def quick_cifar(opts):
 	model_string += finish
 
 	''' Net Options'''
-	opts[OPTS_MODEL] = model_string
+	opts_net = NetOpts(model_string,
+	                   inputchannels=3,
+	                   inputspatsz=32)
 	'''Optimizer Options'''
-
+	opts_optimizer=None
 	'''Epocher Options'''
-
-	return model_string, opts
+	opts_epocher = EpocherOpts(epochnum=150,
+	                           batchsz=100,
+	                           shuffledata=True,
+	                           numworkers=1)
+	''' Create All opts'''
+	opts = allOpts(netopts=opts_net,optimizeropts=opts_optimizer,epocheropts=opts_epocher)
+	return opts
