@@ -18,6 +18,8 @@ class StaticNet(nn.Module):
 		# kernel
 		self.opts = opts
 		self.layerlist = self.parse_model_string(opts.modelstring,self.opts)
+		for bloacknum,layer in enumerate(self.layerlist):
+			self.add_module('block'+str(bloacknum),layer)
 
 	def forward(self, x):
 		# Max pooling over a (2, 2) window
@@ -34,3 +36,4 @@ class StaticNet(nn.Module):
 		for blocknum, layer_string in enumerate(layer_list_string, 0):
 			layer,out_n_channel = parse_layer_string(layer_string,out_n_channel)
 			layer_list += [layer]
+		return layer_list

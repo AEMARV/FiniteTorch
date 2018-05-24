@@ -1,14 +1,17 @@
 '''All the parser functions is implemented here'''
 import torch.nn as nn
-
+import math
 
 def parse_layer_opts(layer_string):
 	'''input is a layer description string with name|p1:[v1],p2[v2]... convention'''
 	layer_string.rstrip(' ')
 	temp = layer_string.split('|')
 	layer_name_str = temp[0]
-	layer_opts_string = temp[1]
-	layer_opts_list = layer_opts_string.split(',')
+	if len(temp)>1:
+		layer_opts_string = temp[1]
+		layer_opts_list = layer_opts_string.split(',')
+	else:
+		layer_opts_list =[]
 	layer_opts = {}
 	for param_value in layer_opts_list:
 		param_value_list = param_value.split(':')
@@ -32,7 +35,7 @@ def parse_layer_string(layer_string,in_n_channel):
 	elif layer_name_str == 'conv':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
-		stride = int(layer_opts['stride'])
+		stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
 		pad = layer_opts['pad']
 		pad = evalpad(pad,ksize)
 		layer = nn.Conv2d(in_channels=in_n_channel,
@@ -49,14 +52,14 @@ def parse_layer_string(layer_string,in_n_channel):
 		ksize = int(layer_opts['r'])
 		stride = int(layer_opts['stride'])
 		pad = layer_opts['pad']
-		pad = evalpad(pad)
+		pad = evalpad(pad,ksize)
 		layer = nn.MaxPool2d(kernel_size=ksize, stride=stride, padding=pad)
 		out_n_channel = in_n_channel
 	elif layer_name_str == 'avgpool':
 		ksize = int(layer_opts['r'])
 		stride = int(layer_opts['stride'])
 		pad = layer_opts['pad']
-		pad = evalpad(pad)
+		pad = evalpad(pad,ksize)
 		layer = nn.AvgPool2d(kernel_size=ksize, stride=stride, padding=pad)
 		out_n_channel = in_n_channel
 	else:

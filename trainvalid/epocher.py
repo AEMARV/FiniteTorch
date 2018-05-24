@@ -5,10 +5,10 @@ from optstructs import EpocherOpts
 from torch.optim import Optimizer
 class Epocher(object):
 	def __init__(self,model:Module,
-	             optimizer:Optimizer,
-	             trainloader:DataLoader,
-	             testloader:DataLoader,
-	             opts:EpocherOpts):
+				 optimizer:Optimizer,
+				 trainloader:DataLoader,
+				 testloader:DataLoader,
+				 opts:EpocherOpts):
 
 		super(Epocher, self).__init__()
 		self.model = model
@@ -33,8 +33,8 @@ class Epocher(object):
 			run_loss += loss.item()
 			#TODO: Print Batch Statistics
 			print('prefixprint:' 
-			      'batch:%d/%d'%(batch_n,totalbatches) +
-			      'loss:%.4f'% run_loss)
+				  'batch:%d/%d'%(batch_n,totalbatches) +
+				  'loss:%.4f'% run_loss)
 
 		# TODO: Evaluate Test
 		run_loss = 0
@@ -48,11 +48,12 @@ class Epocher(object):
 			avg_loss = run_loss/(batch_n * self.opts.batchsz)
 			#TODO: Print Batch Statistics
 		print('prefixprint:' +
-		      'val_loss:%.4f' % avg_loss)
+			  'val_loss:%.4f' % avg_loss)
 
 		# TODO: Visualizing
 		# TODO: Saving Results
 
 	def run_many_epochs(self):
 		for epoch in range(self.opts.epochnum):
-			self.run_epoch()
+			prefixtext = 'Epoch %d' % epoch
+			self.run_epoch(prefixtext)

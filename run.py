@@ -10,12 +10,13 @@ if __name__ == '__main__':
 			# Get Model Module and Optimizer
 			model_module, opts = get_model_module(model_name)
 			# Create Iterable for Training
-			trainset, testset = create_data_set(dataset_name,opts)
+			trainset, testset, opts = create_data_set(dataset_name,opts)
 			# Create Optimizer
 			optmizer = create_optimizer(opts,model_module)
 			#TODO: PRINT OPTIONS
 			#TODO: Train and Validate model
 			epocher = Epocher(model_module,
+                              optmizer,
 			                  trainset,
 			                  testset,
 			                  opts.epocheropts)

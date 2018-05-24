@@ -5,12 +5,12 @@ import torch
 def create_optimizer(opts:allOpts,model:Module):
 	optimopts = opts.optimizeropts
 	if opts.gpu:
-		device = torch.device("cuda:0")
-		model.to(device=device)
-	optim = locals()[optimopts.type](model.parameters(),
-	                               lr = optimopts.lr,
+		device = torch.device("cpu")
+		model =model.to(device=device)
+	optim = globals()[optimopts.type](model.parameters(),
+                                      lr = optimopts.lr,
 	                               momentum=optimopts.momentum,
 	                               weight_decay=optimopts.weight_decay,
 	                               dampening=optimopts.dampening,
-	                               nestrov=optimopts.nestrov)
+	                               nesterov=optimopts.nestrov)
 	return optim
