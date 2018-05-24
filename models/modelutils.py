@@ -1,4 +1,4 @@
-from parser.staticnets import StaticNet
+from netparsers.staticnets import StaticNet
 from typing import Tuple
 from models.realmodels import *
 from optstructs import *

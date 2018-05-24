@@ -1,6 +1,6 @@
 import torch.nn as nn
 from optstructs import *
-from parser.parseutils import *
+from netparsers.parseutils import *
 import math
 class StaticNet(nn.Module):
 	''' A static Module constructed from a model string. The model string specs are parsed with the static functions
