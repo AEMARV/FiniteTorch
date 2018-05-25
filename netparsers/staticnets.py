@@ -1,6 +1,7 @@
 import torch.nn as nn
 from optstructs import *
 from netparsers.parseutils import *
+import torch.tensor
 import math
 class StaticNet(nn.Module):
 	''' A static Module constructed from a model string. The model string specs are parsed with the static functions
@@ -35,5 +36,6 @@ class StaticNet(nn.Module):
 		out_n_channel = in_n_channel
 		for blocknum, layer_string in enumerate(layer_list_string, 0):
 			layer,out_n_channel = parse_layer_string(layer_string,out_n_channel)
-			layer_list += [layer]
+			if layer is not None:
+				layer_list += [layer]
 		return layer_list

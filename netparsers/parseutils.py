@@ -45,6 +45,7 @@ def parse_layer_string(layer_string,in_n_channel):
 						  padding=pad,
 						  bias=True)
 		out_n_channel = fnum
+
 	elif layer_name_str == 'relu':
 		layer = nn.ReLU()
 		out_n_channel = in_n_channel

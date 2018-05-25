@@ -12,7 +12,7 @@ def quick_cifar() -> allOpts:
 	model_string += 'conv|r:5,f:64,pad:same,bias:1' + d + nl + d
 	model_string += 'avgpool|r:3,f:32,pad:same,stride:2,bias:1' + d
 	model_string += 'conv|r:4,f:64,pad:same,bias:1' + d + nl + d
-	model_string += 'conv|r:1,f:10,pad:same,bias:1' + d
+	model_string += 'conv|r:7,f:10,pad:valid,bias:1' + d
 	model_string += finish
 
 	''' Net Options'''
@@ -20,7 +20,7 @@ def quick_cifar() -> allOpts:
 	                   inputchannels=3,
 	                   inputspatsz=32)
 	'''Optimizer Options'''
-	opts_optim =OptimOpts(lr=1,
+	opts_optim =OptimOpts(lr=0.01,
 	                      type='SGD',
 	                      momentum=0.9,
 	                      weight_decay=1e-5,
@@ -32,7 +32,7 @@ def quick_cifar() -> allOpts:
 	                           shuffledata=True,
 	                           loss=torch.nn.CrossEntropyLoss(),
 	                           numworkers=1,
-	                           gpu=True)
+	                           gpu=False)
 	''' Create All opts'''
 	opts = allOpts(netopts=opts_net,
 	               optimizeropts=opts_optim,

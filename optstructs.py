@@ -15,6 +15,7 @@ class EpocherOpts(object):
 		self.batchperepoch = batchperepoch
 		self.loss = loss
 		self.gpu = gpu
+		self.classnum = 0
 		if self.gpu:
 			self.device = torch.device("cuda:0")
 		else:
