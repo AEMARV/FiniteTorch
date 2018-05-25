@@ -32,7 +32,7 @@ def quick_cifar() -> allOpts:
 	                           shuffledata=True,
 	                           loss=torch.nn.CrossEntropyLoss(),
 	                           numworkers=1,
-	                           gpu=False)
+	                           gpu=True)
 	''' Create All opts'''
 	opts = allOpts(netopts=opts_net,
 	               optimizeropts=opts_optim,

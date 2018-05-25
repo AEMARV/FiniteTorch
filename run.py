@@ -19,7 +19,8 @@ if __name__ == '__main__':
                               optmizer,
 			                  trainset,
 			                  testset,
-			                  opts.epocheropts)
+			                  opts.epocheroptsf,
+			                  opts)
 			epocher.run_many_epochs()
 
 
