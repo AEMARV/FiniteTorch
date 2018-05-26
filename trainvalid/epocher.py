@@ -22,13 +22,13 @@ class Epocher(object):
 		self.testloader = testloader
 		self.optimizer = optimizer
 		self.opts = opts
-		self.optall = allOpts
+		self.optall = optsAll
 		if results is None:
 			self.results = ResultStruct(self.optall)
 		else:
 			self.results = results
 
-	def run_epoch(self,prefixprint:str):
+	def run_epoch(self,prefixprint:str)->dict:
 		run_loss = 0.0
 		totalbatches = 100
 		corrects = 0
@@ -52,17 +52,22 @@ class Epocher(object):
 			totalsamples += labels.size(0)
 			train_acc = corrects/totalsamples
 			train_loss = (run_loss/(batch_n+1))
-			print(prefixprint +':' 
+			print(' '+ prefixprint +':' 
 				  'batch: %d '%(batch_n) +
-				  'train_loss: %.4f'% train_loss +
-			      'train accuracy: %.2f'% (train_acc*100)
+				  ' train_loss: %.4f'% train_loss +
+			      ' train accuracy: %.2f'% (train_acc*100),end="\r"
 			      )
+		print(' '+ prefixprint + ':'
+		                    'batch: %d ' % (batch_n) +
+		      ' train_loss: %.4f' % train_loss +
+		      ' train accuracy: %.2f' % (train_acc * 100), end=" "
+		      )
 
 		# TODO: Evaluate Test
 		val_run_loss = 0
 		totalsamples = 0
 		val_corrects = 0
-		for batch_n,data in enumerate(self.trainloader):
+		for batch_n,data in enumerate(self.testloader):
 			inputs, labels = data
 			inputs, labels = inputs.to(self.opts.device),labels.to(self.opts.device)
 			self.optimizer.zero_grad()
@@ -73,24 +78,24 @@ class Epocher(object):
 			accthis = (predlab == labels).sum().item()
 			val_corrects += accthis
 			totalsamples += labels.size(0)
-			val_acc = corrects/totalsamples
+			val_acc = val_corrects/totalsamples
 			loss = self.opts.loss(output,labels)
 			val_run_loss += loss.item()
 			val_avg_loss = run_loss/(batch_n+1)
 
-			print(prefixprint + ':' +
-				  'val_loss: %.4f' % val_avg_loss +
-			      'val_acc: %.2f' % (val_acc*100))
-		return train_acc, train_loss, val_acc, val_avg_loss
+		print(' '+ prefixprint + ':' +
+		      ' val_loss: %.4f' % val_avg_loss +
+		      ' val_acc: %.2f' % (val_acc * 100))
+		resdict = dict(val_acc=val_acc*100,train_acc=train_acc*100,val_loss=val_avg_loss,train_loss=train_loss)
+		return resdict
 
-		# TODO: Visualizing
-		# TODO: Saving Results
 
 	def run_many_epochs(self):
 		self.model.to(self.opts.device)
 		for epoch in range(self.opts.epochnum):
 			prefixtext = 'Epoch %d' % epoch
-			trainacc, trainloss,valacc,valloss = self.run_epoch(prefixtext)
-			self.results.add_epoch_res(trainacc,trainloss,valacc,valloss)
+			epochres = self.run_epoch(prefixtext)
+			self.results.add_epoch_res_dict(epochres)
+			self.results.draw()
 
 
