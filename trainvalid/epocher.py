@@ -1,5 +1,6 @@
 from torch.nn import Module
 import torch.nn as nn
+
 from torch.utils.data import DataLoader
 from optstructs import EpocherOpts
 from optstructs import allOpts
@@ -68,20 +69,21 @@ class Epocher(object):
 		totalsamples = 0
 		val_corrects = 0
 		for batch_n,data in enumerate(self.testloader):
-			inputs, labels = data
-			inputs, labels = inputs.to(self.opts.device),labels.to(self.opts.device)
-			self.optimizer.zero_grad()
-			output = self.model(inputs)
-			output = output.view(-1, self.opts.classnum)
-			#TODO: Print Batch Statistics
-			predlab = torch.argmax(output, 1, keepdim=False)
-			accthis = (predlab == labels).sum().item()
-			val_corrects += accthis
-			totalsamples += labels.size(0)
-			val_acc = val_corrects/totalsamples
-			loss = self.opts.loss(output,labels)
-			val_run_loss += loss.item()
-			val_avg_loss = run_loss/(batch_n+1)
+			with torch.set_grad_enabled(False):
+				inputs, labels = data
+				inputs, labels = inputs.to(self.opts.device),labels.to(self.opts.device)
+				self.optimizer.zero_grad()
+				output = self.model(inputs)
+				output = output.view(-1, self.opts.classnum)
+				#TODO: Print Batch Statistics
+				predlab = torch.argmax(output, 1, keepdim=False)
+				accthis = (predlab == labels).sum().item()
+				val_corrects += accthis
+				totalsamples += labels.size(0)
+				val_acc = val_corrects/totalsamples
+				loss = self.opts.loss(output,labels)
+				val_run_loss += loss.item()
+				val_avg_loss = run_loss/(batch_n+1)
 
 		print(' '+ prefixprint + ':' +
 		      ' val_loss: %.4f' % val_avg_loss +

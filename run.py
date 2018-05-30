@@ -3,7 +3,7 @@ from data.datasetutils import *
 from trainvalid.optimizer import *
 from trainvalid.epocher import *
 if __name__ == '__main__':
-	model_names = ['quick_cifar']
+	model_names = ['quick_cifar_hello_kl']
 	dataset_names = ['cifar10']
 	for dataset_name in dataset_names:
 		for model_name in model_names:

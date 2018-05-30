@@ -1,6 +1,8 @@
 '''All the parser functions is implemented here'''
 import torch.nn as nn
 import math
+from layers.klmodules import *
+from layers.Initializers import *
 
 def parse_layer_opts(layer_string):
 	'''input is a layer description string with name|p1:[v1],p2[v2]... convention'''
@@ -18,7 +20,6 @@ def parse_layer_opts(layer_string):
 		layer_opts[param_value_list[0]] = param_value_list[1]
 	return layer_name_str,layer_opts
 
-
 def evalpad(pad, ksize):
 	if pad == 'same':
 		totalpad = ksize - 1
@@ -27,11 +28,68 @@ def evalpad(pad, ksize):
 		padding = 0
 	return padding
 
+def get_init(initstring:str)->Parameterizer:
+	if initstring=='logstochu':
+		init = LogParameter(isstoch=True,isuniform=True)
+	elif initstring == 'logstoch':
+		init = LogParameter(isstoch=True, isuniform=False)
+	elif initstring == 'log':
+		init = LogParameter(isstoch=False, isuniform=False)
+	else:
+		raise(Exception('Unknown Parameterizer: '+initstring))
+	return init
+
 def parse_layer_string(layer_string,in_n_channel):
 	out_n_channel = -1
 	layer_name_str,layer_opts = parse_layer_opts(layer_string)
 	if layer_name_str == 'fin':
 		return None,in_n_channel
+	# -------------------------------------------------------------------Finite Convs
+	elif layer_name_str == 'klconv':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
+		pad = layer_opts['pad']
+		param = get_init(layer_opts['param'])
+		layer = KLConv(fnum=fnum,
+		               kersize=ksize,
+		               inp_chan_sz=in_n_channel,
+		               isbiased=False,
+		               isrelu=True,
+		               biasinit=None,
+		               padding=pad,
+		               paraminit=param)
+		out_n_channel = fnum
+	elif layer_name_str == 'klconvb':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
+		pad = layer_opts['pad']
+		param = get_init(layer_opts['param'])
+		layer = KLConvB(fnum=fnum,
+		               kersize=ksize,
+		               inp_chan_sz=in_n_channel,
+		               isbiased=False,
+		               isrelu=True,
+		               biasinit=None,
+		               padding=pad,
+		               paraminit=param)
+		out_n_channel = fnum
+	# -------------------------------------------------------------------Finite POOLS
+	elif layer_name_str == 'klavgpool':
+		ksize = int(layer_opts['r'])
+		stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
+		pad = layer_opts['pad']
+		layer = KLAvgPool(spsize=ksize,stride=stride,pad=pad)
+		out_n_channel = in_n_channel
+	# -------------------------------------------------------------------Finite Activations
+	elif layer_name_str == 'klavgpool':
+		isstoch = bool(layer_opts['s'])
+		layer = LNorm(isstoch=isstoch)
+		out_n_channel = in_n_channel
+		nn.NLLLoss
+	# -------------------------------------------------------------------Conv Equipment
+
 	elif layer_name_str == 'conv':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
@@ -45,7 +103,6 @@ def parse_layer_string(layer_string,in_n_channel):
 						  padding=pad,
 						  bias=True)
 		out_n_channel = fnum
-
 	elif layer_name_str == 'relu':
 		layer = nn.ReLU()
 		out_n_channel = in_n_channel
