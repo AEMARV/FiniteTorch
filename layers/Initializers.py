@@ -49,6 +49,7 @@ class LogParameter(Parameterizer):
 
 	def __call__(self, shape:Tuple)->Tensor:
 		if self.isbinary:
+			self.normaxis=4
 			shape = shape + (2,)
 		out = torch.empty(shape)
 		out = out.exponential_()

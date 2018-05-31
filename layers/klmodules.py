@@ -160,9 +160,9 @@ class LNorm(Module):
 		self.isstoch= isstoch
 	def forward(self, x):
 		if self.isstoch:
-			m = LogSumExpStoch.apply(x, axis=1)
+			m = LogSumExpStoch.apply(x, 1)
 		else:
-			m = LogSumExp.apply(x, axis=1)
+			m = LogSumExp.apply(x, 1)
 		out = x - m
 		return out
 

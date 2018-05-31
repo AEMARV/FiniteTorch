@@ -83,11 +83,12 @@ def parse_layer_string(layer_string,in_n_channel):
 		layer = KLAvgPool(spsize=ksize,stride=stride,pad=pad)
 		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Finite Activations
-	elif layer_name_str == 'klavgpool':
+	elif layer_name_str == 'lnorm':
 		isstoch = bool(layer_opts['s'])
 		layer = LNorm(isstoch=isstoch)
 		out_n_channel = in_n_channel
-		nn.NLLLoss
+		layer = LNorm(isstoch=isstoch)
+		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Conv Equipment
 
 	elif layer_name_str == 'conv':
