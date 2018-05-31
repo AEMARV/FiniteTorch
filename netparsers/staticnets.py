@@ -22,7 +22,7 @@ class StaticNet(nn.Module):
 		for bloacknum,layer in enumerate(self.layerlist):
 			self.add_module('block'+str(bloacknum),layer)
 
-	def forward(self, x):
+	def forward(self, x:Tensor):
 		# Max pooling over a (2, 2) window
 		for layer in self.layerlist:
 			x = layer(x)
