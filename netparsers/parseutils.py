@@ -35,6 +35,8 @@ def get_init(initstring:str)->Parameterizer:
 		init = LogParameter(isstoch=True, isuniform=False)
 	elif initstring == 'log':
 		init = LogParameter(isstoch=False, isuniform=False)
+	elif initstring =='logu':
+		init = LogParameter(isstoch=False, isuniform=True)
 	else:
 		raise(Exception('Unknown Parameterizer: '+initstring))
 	return init
@@ -85,8 +87,6 @@ def parse_layer_string(layer_string,in_n_channel):
 	# -------------------------------------------------------------------Finite Activations
 	elif layer_name_str == 'lnorm':
 		isstoch = bool(layer_opts['s'])
-		layer = LNorm(isstoch=isstoch)
-		out_n_channel = in_n_channel
 		layer = LNorm(isstoch=isstoch)
 		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Conv Equipment

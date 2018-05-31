@@ -17,8 +17,7 @@ def get_cifar10(opts:allOpts):
 	opts.epocheropts.classnum=10
 
 	transform = transforms.Compose(
-	[transforms.ToTensor(),
-	 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+	[transforms.ToTensor()])
 	# Construct loaders
 	trainset = tv.datasets.CIFAR10(PATH_DATA, train=True, download=True,transform=transform)
 	testset = tv.datasets.CIFAR10(PATH_DATA, train=False, download=True,transform=transform)

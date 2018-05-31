@@ -1,6 +1,7 @@
 from torch import Tensor
 from layers.klfunctions import *
 import torch.nn.functional as F
+import torch.nn as nn
 import torch
 from typing import List,Tuple,Dict
 ''' Interface Class'''

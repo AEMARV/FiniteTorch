@@ -10,4 +10,4 @@ OPTS_DATASET_CHANS = 'datachandim'
 OPTS_DATASET_SPATIAL = 'datarcdim'
 OPTS_OPTMIZER = 'optimizer'
 OPTS_MODEL = 'model'
-epsilon = 1e-8
+epsilon = 1e-7

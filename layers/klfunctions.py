@@ -15,9 +15,9 @@ class LogSumExpStoch(Function):
 		input = input.detach()
 		maxval = input.max(dim=axis,keepdim=True)[0]
 		logsumexp = (input - maxval).exp().sum(dim=axis,keepdim=True).log() + maxval
-		#test= input - logsumexp
-		#testprob = test.exp()
-		#testprob = testprob.sum(dim=axis,keepdim=False)
+		test= input - logsumexp
+		testprob = test.exp()
+		testprob = testprob.sum(dim=axis,keepdim=False)
 
 		ctx.save_for_backward(input,logsumexp,Variable(input.new_tensor(axis,dtype=torch.int32)))
 		return logsumexp
@@ -53,18 +53,18 @@ class LogSumExpStoch(Function):
 class LogSumExp(Function):
 	''' Takes log sum exp along axis 1'''
 	@staticmethod
-	def forward(ctx, input:torch.Tensor,axis=1):
-		np_input = input.detach().numpy()
-		np_output = sc.logsumexp(np_input,axis=axis,keepdims=True)
-		ctx.save_for_backward(input,np_output,axis)
-		return input.new(np_input)
+	def forward(ctx, input:torch.Tensor,axis):
+		input = input.detach()
+		maxval = input.max(dim=axis, keepdim=True)[0]
+		logsumexp = (input - maxval).exp().sum(dim=axis, keepdim=True).log() + maxval
+		ctx.save_for_backward(input, logsumexp, Variable(input.new_tensor(axis, dtype=torch.int32)))
+		return logsumexp
 	@staticmethod
 	def backward(ctx, grad_output:torch.Tensor):
-		grad_output = grad_output.detach().numpy()
 		input,lognorm,axis = ctx.saved_tensors
-		prob = np.exp(input - lognorm)
+		prob = (input - lognorm).exp()
 		grad_input = grad_output * prob
-		return grad_output.new_tensor(grad_input)
+		return grad_input,None
 
 	@staticmethod
 	def sample(p:np.ndarray,axis=1):

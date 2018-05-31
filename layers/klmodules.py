@@ -117,9 +117,13 @@ class KLConvB(KLConv_Base):
 
 	def kl_xl_kp(self,x:torch.Tensor):
 		'''conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor'''
-		xclamped = x.clamp(epsilon,1-epsilon)
-		xlog1 = xclamped.log()
-		xlog0 = (1-xclamped).log()
+		#xclamped = x.clamp(epsilon,1-epsilon)
+		xp1 = x
+		xp0 = 1- x
+		xp1.clamp_(epsilon,1)
+		xp0.clamp_(epsilon,1)
+		xlog1 = xp1.log()
+		xlog0 = xp0.log()
 		pkernel0,pkernel1 = self.get_prob_kernel()
 		y0 = self.convwrap(xlog0,pkernel0)
 		y1 = self.convwrap(xlog1,pkernel1)
@@ -158,12 +162,16 @@ class LNorm(Module):
 	def __init__(self,isstoch):
 		super(LNorm,self).__init__()
 		self.isstoch= isstoch
+		if not(self.isstoch):
+			self.implicit_layer = nn.LogSoftmax(dim=1)
+			self.add_module('logsoft',self.implicit_layer)
 	def forward(self, x):
 		if self.isstoch:
 			m = LogSumExpStoch.apply(x, 1)
+			out = x - m
 		else:
-			m = LogSumExp.apply(x, 1)
-		out = x - m
+			out = self.implicit_layer(x)
+
 		return out
 
 
