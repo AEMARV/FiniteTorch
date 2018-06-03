@@ -34,6 +34,7 @@ class Epocher(object):
 		totalbatches = 100
 		corrects = 0
 		totalsamples = 0
+		self.model.train()
 		# TODO: Train on batches
 		for batch_n,data in enumerate(self.trainloader):
 			inputs, labels = data
@@ -46,8 +47,8 @@ class Epocher(object):
 			self.optimizer.step()
 
 			#TODO: Print Batch Statistics
-			run_loss += loss.item()
 			predlab = torch.argmax(output, 1, keepdim=False)
+			run_loss += loss.item()
 			accthis = (predlab == labels).sum().item()
 			corrects += accthis
 			totalsamples += labels.size(0)
@@ -68,6 +69,7 @@ class Epocher(object):
 		val_run_loss = 0
 		totalsamples = 0
 		val_corrects = 0
+		self.model.eval()
 		for batch_n,data in enumerate(self.testloader):
 			with torch.set_grad_enabled(False):
 				inputs, labels = data
@@ -83,7 +85,7 @@ class Epocher(object):
 				val_acc = val_corrects/totalsamples
 				loss = self.opts.loss(output,labels)
 				val_run_loss += loss.item()
-				val_avg_loss = run_loss/(batch_n+1)
+				val_avg_loss = val_run_loss/(batch_n+1)
 
 		print(' '+ prefixprint + ':' +
 		      ' val_loss: %.4f' % val_avg_loss +

@@ -29,16 +29,20 @@ def evalpad(pad, ksize):
 	return padding
 
 def get_init(initstring:str)->Parameterizer:
-	if initstring=='logstochu':
-		init = LogParameter(isstoch=True,isuniform=True)
-	elif initstring == 'logstoch':
-		init = LogParameter(isstoch=True, isuniform=False)
-	elif initstring == 'log':
-		init = LogParameter(isstoch=False, isuniform=False)
-	elif initstring =='logu':
-		init = LogParameter(isstoch=False, isuniform=True)
+	if 'stoch' in initstring:
+		isstoch = True
 	else:
-		raise(Exception('Unknown Parameterizer: '+initstring))
+		isstoch = False
+	if 'unif' in initstring:
+		isuniform = True
+	else:
+		isuniform = False
+	if 'dirich' in initstring:
+		isdirichlet = True
+	else:
+		isdirichlet = False
+
+	init = LogParameter(isstoch=isstoch,isuniform=isuniform,isdirichlet=isdirichlet)
 	return init
 
 def parse_layer_string(layer_string,in_n_channel):
@@ -52,6 +56,7 @@ def parse_layer_string(layer_string,in_n_channel):
 		fnum = int(layer_opts['f'])
 		stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
 		pad = layer_opts['pad']
+		stoch = bool(layer_opts['stoch']=='1')
 		param = get_init(layer_opts['param'])
 		layer = KLConv(fnum=fnum,
 		               kersize=ksize,
@@ -60,13 +65,15 @@ def parse_layer_string(layer_string,in_n_channel):
 		               isrelu=True,
 		               biasinit=None,
 		               padding=pad,
-		               paraminit=param)
+		               paraminit=param,
+		               isstoch=stoch)
 		out_n_channel = fnum
 	elif layer_name_str == 'klconvb':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
 		stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
 		pad = layer_opts['pad']
+		stoch = bool(layer_opts['stoch']=='1')
 		param = get_init(layer_opts['param'])
 		layer = KLConvB(fnum=fnum,
 		               kersize=ksize,
@@ -75,7 +82,8 @@ def parse_layer_string(layer_string,in_n_channel):
 		               isrelu=True,
 		               biasinit=None,
 		               padding=pad,
-		               paraminit=param)
+		               paraminit=param,
+		                isstoch=stoch)
 		out_n_channel = fnum
 	# -------------------------------------------------------------------Finite POOLS
 	elif layer_name_str == 'klavgpool':
@@ -86,7 +94,7 @@ def parse_layer_string(layer_string,in_n_channel):
 		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Finite Activations
 	elif layer_name_str == 'lnorm':
-		isstoch = bool(layer_opts['s'])
+		isstoch = bool(layer_opts['s']==1)
 		layer = LNorm(isstoch=isstoch)
 		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Conv Equipment

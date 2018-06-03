@@ -42,7 +42,7 @@ class ResultStruct(object):
 			res = self.resultdict[key]
 			totalaxes = len(self.resultdict.keys())
 			if len(self.axislist) <= i:
-				caxis = self.fig.add_subplot(totalaxes,1,i+1)
+				caxis = self.fig.add_subplot(1,totalaxes,i+1)
 				caxis.set_title(key)
 				self.axislist.append(caxis)
 			else:

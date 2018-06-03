@@ -17,6 +17,7 @@ class KLConv_Base(Module):
 	             biasinit=None,
 	             padding=None,
 	             stride=1,
+	             isstoch=False
 	             ):
 		super(KLConv_Base,self).__init__()
 		#TODO: Set isbinary switch in paraminit
@@ -25,18 +26,23 @@ class KLConv_Base(Module):
 		self.isbiased = isbiased
 		self.isrelu = isrelu
 		self.stride = stride
+		self.isstoch= isstoch
+		self.axisdim=-2
 		# Build
 		kernel_shape = (fnum,)+(inp_chan_sz,)+(kersize,kersize)
 		self.kernel = Parameter(data=self.paraminit(kernel_shape))
+		self.register_parameter('kernel',self.kernel)
 		if self.isbiased:
 			self.bias = Parameter(data=biasinit(fnum))
 
 	'''Kernel/Bias Getters'''
 	def get_log_kernel(self)-> torch.Tensor:
 		''' Get the kernel in the log domain'''
+
 		return self.paraminit.get_log_kernel(self.kernel)
 
 	def get_prob_kernel(self)-> torch.Tensor:
+
 		return self.paraminit.get_prob_kernel(self.kernel)
 
 	def get_log_bias(self)-> torch.Tensor:
@@ -50,8 +56,8 @@ class KLConv_Base(Module):
 		             stride=self.stride,
 		             padding=self.padding)
 		return y
-	def add_ker_ent(self,y:torch.Tensor,x):
-		H = self.ent_per_spat()
+	def add_ker_ent(self,y:torch.Tensor,x,pker,lker):
+		H = self.ent_per_spat(pker,lker)
 		H = self.convwrap(x[0:,0:1,0:,0:]*0 +1,H)
 		return y + H
 
@@ -70,21 +76,32 @@ class KLConv(KLConv_Base):
 		self.paraminit = paraminit
 		self.paraminit.isbinary = False # DO NOT Move these lines after super
 		super(KLConv,self).__init__(**kwargs)
+		self.axisdim= 1
 
 
 
-	def ent_per_spat(self):
+	def ent_per_spat(self,pker,lker):
 		# Entropy Per spatial Position
-		H = self.get_log_kernel()* self.get_prob_kernel()
+		H = pker*lker
 		H = -H.sum(dim=1,keepdim=True)
 		return H
 	'''KL Conv Functions'''
 
 	def kl_xl_kp(self,x:torch.Tensor):
 		'''conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor'''
-		pkernel = self.get_prob_kernel()
-		y = self.convwrap(x,pkernel)
-		y = self.add_ker_ent(y,x)
+		if self.isstoch and self.training:
+			lkernel =self.get_log_kernel()
+			pkernel = lkernel.exp()
+			pkernel = Sampler.apply(lkernel,self.axisdim)
+			#lkernel = pkernel.clamp(epsilon,None).log()
+
+			y = self.convwrap(x, pkernel)
+			y = self.add_ker_ent(y, x, pkernel,lkernel)
+		else:
+			lkernel = self.get_log_kernel()
+			pkernel = lkernel.exp()
+			y = self.convwrap(x,pkernel)
+			y = self.add_ker_ent(y,x,pkernel,lkernel)
 		return y
 
 	def kl_xp_kl(self,x):
@@ -92,7 +109,9 @@ class KLConv(KLConv_Base):
 		raise(Exception('This KLD is not implemented!'))
 
 	def forward(self, x:torch.Tensor):
-		return self.kl_xl_kp(x)
+
+		y=  self.kl_xl_kp(x)
+		return y
 
 
 
@@ -104,31 +123,47 @@ class KLConvB(KLConv_Base):
 		self.paraminit = paraminit
 		self.paraminit.isbinary = True # DO NOT Move these lines after super
 		super(KLConvB,self).__init__(**kwargs)
+		self.axisdim=4
 
-	def ent_per_spat(self):
+	def ent_per_spat(self,pker,lker):
 		# Entropy Per Spatial Position
-		lker0,lker1 = self.get_log_kernel()
-		pker0,pker1 = self.get_prob_kernel()
+		lker0,lker1 = self.seperate_kernels(lker)
+		pker0,pker1 = self.seperate_kernels(pker)
 		H = (pker0*lker0) + (pker1*lker1)
 		H = -H.sum(dim=1,keepdim=True)
 		return H
-
+	def seperate_kernels(self,k):
+		return k[0:,0:,0:,0:,0], k[0:,0:,0:,0:,1]
 	'''KL Conv Functions'''
-
-	def kl_xl_kp(self,x:torch.Tensor):
-		'''conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor'''
-		#xclamped = x.clamp(epsilon,1-epsilon)
+	def cross_xl_kp(self,x:Tensor,k0:Tensor,k1:Tensor):
 		xp1 = x
 		xp0 = 1- x
 		xp1.clamp_(epsilon,1)
 		xp0.clamp_(epsilon,1)
 		xlog1 = xp1.log()
 		xlog0 = xp0.log()
-		pkernel0,pkernel1 = self.get_prob_kernel()
-		y0 = self.convwrap(xlog0,pkernel0)
-		y1 = self.convwrap(xlog1,pkernel1)
+		y0 = self.convwrap(xlog0,k0)
+		y1 = self.convwrap(xlog1,k1)
 		y = y0 + y1
-		y = self.add_ker_ent(y,x)
+		return y
+	def kl_xl_kp(self,x:torch.Tensor):
+		'''conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor'''
+		#xclamped = x.clamp(epsilon,1-epsilon)
+		if self.isstoch and self.training:
+			lk = self.get_log_kernel()
+			pk = lk.exp()
+			pk = Sampler.apply(lk,4)
+			#lk = pk.clamp(epsilon,None).log()
+
+			pk0,pk1 = self.seperate_kernels(pk)
+			y = self.cross_xl_kp(x,pk0,pk1)
+			y = self.add_ker_ent(y, x, pk,lk)
+		else:
+			lk =self.get_log_kernel()
+			pk = lk.exp()
+			pk0,pk1 = self.seperate_kernels(pk)
+			y = self.cross_xl_kp(x,pk0,pk1)
+			y = self.add_ker_ent(y,x,pk,lk)
 		return y
 
 	def kl_xp_kl(self,x):

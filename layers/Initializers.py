@@ -2,6 +2,7 @@ from torch import Tensor
 from layers.klfunctions import *
 import torch.nn.functional as F
 import torch.nn as nn
+from definition import epsilon
 import torch
 from typing import List,Tuple,Dict
 ''' Interface Class'''
@@ -31,6 +32,7 @@ class LogParameter(Parameterizer):
 	def __init__(self,
 	             isstoch=True,
 	             isuniform=True,
+	             isdirichlet=True,
 	             isbinary=False,
 	             **kwargs):
 		''' isuniform sets all the distributions to uniform
@@ -44,8 +46,9 @@ class LogParameter(Parameterizer):
 			self.normfunc = LogSumExp.apply
 		self.isuniform = isuniform
 		self.isbinary = isbinary
-		if isuniform and not(isstoch):
-			raise(Warning('Uniform Parameterizaiton, while being not stochastic'))
+		self.isdirichlet= isdirichlet
+		#if isuniform and not(isstoch):
+		#	raise(Warning('Uniform Parameterizaiton, while being not stochastic'))
 		self.isuniform = isuniform
 
 	def __call__(self, shape:Tuple)->Tensor:
@@ -54,28 +57,24 @@ class LogParameter(Parameterizer):
 			shape = shape + (2,)
 		out = torch.empty(shape)
 		out = out.exponential_()
+		if self.isdirichlet:
+			out = out / out.sum(dim=self.normaxis,keepdim=True)
+			out = out.clamp(epsilon, 1)
+			out = out.log()
 		if self.isuniform:
 			out = out * 0
-		return out
+		return out.detach_()
 	def get_log_norm(self,k:Tensor)->Tensor:
 		lognorm = self.normfunc(k,self.normaxis)
 		return lognorm
 	def get_log_kernel(self,k:Tensor)->Tuple[Tensor]:
 		k =  k- self.get_log_norm(k)
-		if self.isbinary:
-			return k[0:,0:,0:,0:,0], k[0:,0:,0:,0:,1]
-		else:
-			return k
+		#return k[0:,0:,0:,0:,0], k[0:,0:,0:,0:,1]
+		return k
 	def get_prob_kernel(self,k:Tensor)->Tensor:
-		if self.isbinary:
-			k0,k1 = self.get_log_kernel(k)
-			k0 = k0.exp()
-			k1 = k1.exp()
-			return k0,k1
-		else:
-			k = self.get_log_kernel(k)
-			k = k.exp()
-			return k
+		k = self.get_log_kernel(k)
+		k = k.exp()
+		return k
 
 
 
