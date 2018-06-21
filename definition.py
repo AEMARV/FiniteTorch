@@ -11,3 +11,5 @@ OPTS_DATASET_SPATIAL = 'datarcdim'
 OPTS_OPTMIZER = 'optimizer'
 OPTS_MODEL = 'model'
 epsilon = 1e-7
+
+def setup():

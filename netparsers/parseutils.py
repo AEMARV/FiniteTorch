@@ -41,8 +41,10 @@ def get_init(initstring:str)->Parameterizer:
 		isdirichlet = True
 	else:
 		isdirichlet = False
-
-	init = LogParameter(isstoch=isstoch,isuniform=isuniform,isdirichlet=isdirichlet)
+	if 'log' in initstring:
+		init = LogParameter(isstoch=isstoch,isuniform=isuniform,isdirichlet=isdirichlet)
+	elif 'sphere' in initstring:
+		init = SphereParameter(isstoch=isstoch, isuniform=isuniform, isdirichlet=isdirichlet)
 	return init
 
 def parse_layer_string(layer_string,in_n_channel):

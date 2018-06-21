@@ -28,6 +28,7 @@ class KLConv_Base(Module):
 		self.stride = stride
 		self.isstoch= isstoch
 		self.axisdim=-2
+		self.log_prob = 0
 		# Build
 		kernel_shape = (fnum,)+(inp_chan_sz,)+(kersize,kersize)
 		self.kernel = Parameter(data=self.paraminit(kernel_shape))
@@ -56,6 +57,12 @@ class KLConv_Base(Module):
 		             stride=self.stride,
 		             padding=self.padding)
 		return y
+	def convstochwrap(self,x:Tensor,w:Parameter):
+		y = F.unfold(x, w.shape[2:4],padding=self.padding,stride=self.stride)
+		k = F.unfold(w,w.shape[2:4])
+		krep = Tensor.expand()
+
+
 	def add_ker_ent(self,y:torch.Tensor,x,pker,lker):
 		H = self.ent_per_spat(pker,lker)
 		H = self.convwrap(x[0:,0:1,0:,0:]*0 +1,H)
@@ -93,7 +100,7 @@ class KLConv(KLConv_Base):
 			lkernel =self.get_log_kernel()
 			pkernel = lkernel.exp()
 			pkernel = Sampler.apply(lkernel,self.axisdim)
-			#lkernel = pkernel.clamp(epsilon,None).log()
+			lkernel = pkernel.clamp(epsilon,None).log()
 
 			y = self.convwrap(x, pkernel)
 			y = self.add_ker_ent(y, x, pkernel,lkernel)
@@ -153,8 +160,7 @@ class KLConvB(KLConv_Base):
 			lk = self.get_log_kernel()
 			pk = lk.exp()
 			pk = Sampler.apply(lk,4)
-			#lk = pk.clamp(epsilon,None).log()
-
+			lk = pk.clamp(epsilon,None).log()
 			pk0,pk1 = self.seperate_kernels(pk)
 			y = self.cross_xl_kp(x,pk0,pk1)
 			y = self.add_ker_ent(y, x, pk,lk)
@@ -175,11 +181,30 @@ class KLConvB(KLConv_Base):
 
 
 class KLAvgPool(Module):
-	def __init__(self,spsize,stride,pad):
+	def __init__(self,spsize,stride,pad,isstoch=True):
 		super(KLAvgPool,self).__init__()
 		self.spsize= spsize
 		self.stride = stride
 		self.pad = num_pad_from_symb_pad(pad,spsize)
+		self.isstoch = isstoch
+
+	def forward(self, x:Tensor):
+		einput = x.exp()
+		out = F.avg_pool2d(einput,
+		                   self.spsize,
+		                   stride=self.stride,
+		                   padding=self.pad,
+		                   count_include_pad=False)
+		out = out.clamp(epsilon,None)
+		out = out.log()
+		return out
+class KLAvgPoolGL(Module):
+	def __init__(self,spsize,stride,pad,isstoch=True):
+		super(KLAvgPoolGL,self).__init__()
+		self.spsize= spsize
+		self.stride = stride
+		self.pad = num_pad_from_symb_pad(pad,spsize)
+		self.isstoch = isstoch
 
 	def forward(self, x:Tensor):
 		einput = x.exp()
@@ -202,7 +227,7 @@ class LNorm(Module):
 			self.add_module('logsoft',self.implicit_layer)
 	def forward(self, x):
 		if self.isstoch:
-			m = LogSumExpStoch.apply(x, 1)
+			m = LogSumExpStoch.apply(x, 1,1)
 			out = x - m
 		else:
 			out = self.implicit_layer(x)

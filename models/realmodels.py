@@ -138,3 +138,147 @@ def quick_cifar_hello_kl() -> allOpts:
 	               epocheropts=opts_epocher,
 	               )
 	return opts
+def quick_cifar_hello_kl_v1() -> allOpts:
+	model_string = ''
+	d = '->'
+	nl = 'lnorm|s:0'
+	convparams = 'param:logstoch,stoch:0'
+	finish = 'fin'
+	model_string += 'klconvb|r:3,f:64,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:64,pad:same,bias:1,{}'.format(convparams)  + d + nl + d
+	model_string += 'klconv|r:3,f:64,pad:same,bias:1,{}'.format(convparams)  + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1,stoch:1'         + d + nl + d
+	model_string += 'klconv|r:1,f:10,pad:valid,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:4,pad:valid,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += finish
+
+	''' Net Options'''
+	opts_net = NetOpts(model_string,
+	                   inputchannels=3,
+	                   inputspatsz=32)
+	'''Optimizer Options'''
+	opts_optim =OptimOpts(lr=1,
+	                      type='SGD',
+	                      momentum=0.9,
+	                      weight_decay=0,
+	                      dampening=0,
+	                      nestrov=False)
+	'''Epocher Options'''
+	opts_epocher = EpocherOpts(epochnum=3000,
+	                           batchsz=100,
+	                           shuffledata=True,
+	                           loss=torch.nn.NLLLoss(),
+	                           numworkers=1,
+	                           gpu=True)
+	''' Create All opts'''
+	opts = allOpts(netopts=opts_net,
+	               optimizeropts=opts_optim,
+	               epocheropts=opts_epocher,
+	               )
+	return opts
+def quick_cifar_hello_kl_v2() -> allOpts:
+	model_string = ''
+	d = '->'
+	nl = 'lnorm|s:1'
+	convparams = 'param:sphere,stoch:0'
+	finish = 'fin'
+	model_string += 'klconvb|r:3,f:64,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:64,pad:same,bias:1,{}'.format(convparams)  + d + nl + d
+	model_string += 'klconv|r:3,f:64,pad:same,bias:1,{}'.format(convparams)  + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1,stoch:1'         + d + nl + d
+	model_string += 'klconv|r:1,f:10,pad:valid,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:4,pad:valid,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += finish
+
+	''' Net Options'''
+	opts_net = NetOpts(model_string,
+	                   inputchannels=3,
+	                   inputspatsz=32)
+	'''Optimizer Options'''
+	opts_optim =OptimOpts(lr=1,
+	                      type='SGD',
+	                      momentum=0.9,
+	                      weight_decay=0,
+	                      dampening=0,
+	                      nestrov=False)
+	'''Epocher Options'''
+	opts_epocher = EpocherOpts(epochnum=3000,
+	                           batchsz=100,
+	                           shuffledata=True,
+	                           loss=torch.nn.NLLLoss(),
+	                           numworkers=1,
+	                           gpu=True)
+	''' Create All opts'''
+	opts = allOpts(netopts=opts_net,
+	               optimizeropts=opts_optim,
+	               epocheropts=opts_epocher,
+	               )
+	return opts
+def histog_kl_v0() -> allOpts:
+	model_string = ''
+	d = '->'
+	nl = 'lnorm|s:1'
+	convparams = 'param:log,stoch:0'
+	finish = 'fin'
+	model_string += 'klconvb|r:3,f:64,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += 'klconv|r:1,f:64,pad:same,bias:1,{}'.format(convparams)  + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += 'klconv|r:1,f:64,pad:same,bias:1,{}'.format(convparams)  + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
+	model_string += 'klconv|r:1,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += 'klconv|r:1,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += 'klconv|r:1,f:128,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
+	model_string += 'klconv|r:1,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += 'klconv|r:1,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += 'klconv|r:1,f:256,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1,stoch:1'         + d + nl + d
+	model_string += 'klconv|r:1,f:10,pad:same,bias:1,{}'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:4,pad:valid,stride:1,bias:1,stoch:1' + d + nl + d
+	model_string += finish
+
+	''' Net Options'''
+	opts_net = NetOpts(model_string,
+	                   inputchannels=3,
+	                   inputspatsz=32)
+	'''Optimizer Options'''
+	opts_optim =OptimOpts(lr=1,
+	                      type='SGD',
+	                      momentum=0.9,
+	                      weight_decay=0,
+	                      dampening=0,
+	                      nestrov=False)
+	'''Epocher Options'''
+	opts_epocher = EpocherOpts(epochnum=3000,
+	                           batchsz=100,
+	                           shuffledata=True,
+	                           loss=torch.nn.NLLLoss(),
+	                           numworkers=1,
+	                           gpu=True)
+	''' Create All opts'''
+	opts = allOpts(netopts=opts_net,
+	               optimizeropts=opts_optim,
+	               epocheropts=opts_epocher,
+	               )
+	return opts
