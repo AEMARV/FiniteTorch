@@ -59,8 +59,11 @@ class KLConv_Base(Module):
 		return y
 	def convstochwrap(self,x:Tensor,w:Parameter):
 		y = F.unfold(x, w.shape[2:4],padding=self.padding,stride=self.stride)
+		# y is now a 3-dim mat with N*(ch*h*w)*(sp_out) shape
 		k = F.unfold(w,w.shape[2:4])
+		# repeat k
 		krep = Tensor.expand()
+		#
 
 
 	def add_ker_ent(self,y:torch.Tensor,x,pker,lker):
