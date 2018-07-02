@@ -57,14 +57,6 @@ class KLConv_Base(Module):
 		             stride=self.stride,
 		             padding=self.padding)
 		return y
-	def convstochwrap(self,x:Tensor,w:Parameter):
-		y = F.unfold(x, w.shape[2:4],padding=self.padding,stride=self.stride)
-		# y is now a 3-dim mat with N*(ch*h*w)*(sp_out) shape
-		k = F.unfold(w,w.shape[2:4])
-		# repeat k
-		krep = Tensor.expand()
-		#
-
 
 	def add_ker_ent(self,y:torch.Tensor,x,pker,lker):
 		H = self.ent_per_spat(pker,lker)
@@ -99,19 +91,11 @@ class KLConv(KLConv_Base):
 
 	def kl_xl_kp(self,x:torch.Tensor):
 		'''conv2d(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1) -> Tensor'''
-		if self.isstoch and self.training:
-			lkernel =self.get_log_kernel()
-			pkernel = lkernel.exp()
-			pkernel = Sampler.apply(lkernel,self.axisdim)
-			lkernel = pkernel.clamp(epsilon,None).log()
 
-			y = self.convwrap(x, pkernel)
-			y = self.add_ker_ent(y, x, pkernel,lkernel)
-		else:
-			lkernel = self.get_log_kernel()
-			pkernel = lkernel.exp()
-			y = self.convwrap(x,pkernel)
-			y = self.add_ker_ent(y,x,pkernel,lkernel)
+		lkernel = self.get_log_kernel()
+		pkernel = lkernel.exp()
+		y = self.convwrap(x,pkernel)
+		y = self.add_ker_ent(y,x,pkernel,lkernel)
 		return y
 
 	def kl_xp_kl(self,x):
@@ -119,8 +103,10 @@ class KLConv(KLConv_Base):
 		raise(Exception('This KLD is not implemented!'))
 
 	def forward(self, x:torch.Tensor):
-
-		y=  self.kl_xl_kp(x)
+		if self.training:
+			y = KLConvStoch.apply(x,self.get_log_kernel())
+		else:
+			y=  self.kl_xl_kp(x)
 		return y
 
 
@@ -237,6 +223,15 @@ class LNorm(Module):
 
 		return out
 
+class Inp2Log(Module):
+	def __init__(self):
+		super(Inp2Log,self).__init__()
+	def forward(self, x:Tensor):
+		x= x.clamp(epsilon,None) # type: Tensor
+		x = x/x.sum(dim=1,keepdim=True)
+		out = x.log()
+
+		return out
 
 def num_pad_from_symb_pad(pad:str,ksize:int)->Tuple[int]:
 	if pad=='same':

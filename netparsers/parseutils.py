@@ -99,6 +99,10 @@ def parse_layer_string(layer_string,in_n_channel):
 		isstoch = bool(layer_opts['s']==1)
 		layer = LNorm(isstoch=isstoch)
 		out_n_channel = in_n_channel
+	# -------------------------------------------------------------------Input Transformers
+	elif layer_name_str == 'inplog':
+		layer = Inp2Log()
+		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Conv Equipment
 
 	elif layer_name_str == 'conv':

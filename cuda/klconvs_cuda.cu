@@ -17,7 +17,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 
 
-__device__ __forceinline__ int calcLinInd(int h, int w, int c, int b, size_t HD, size_t WD,size_t CD ){
+__device__ __forceinline__ size_t calcLinInd(int h, int w, int c, int b, size_t HD, size_t WD,size_t CD ){
 
     return w + WD*(h + HD*(c + CD*(b)));
 }
@@ -28,6 +28,10 @@ __device__ __forceinline__ void calcIndpInd(int linind, int h, int w, int c, int
 __device__ __forceinline__ void calcIndForRandom(int linind, int h, int w, int c, int b, size_t HD, size_t WD,size_t CD,int *out ){
 *out = w + WD*(h + HD*(c + CD*(b)));
     return ;
+}
+__device__ __forceinline__ size_t calcLinInd4(int idx_a, int idx_b, int idx_c, int idx_d, size_t AD, size_t BD,size_t CD, size_t DD ){
+
+    return idx_d + DD*(idx_c + CD*(idx_b + BD*(idx_a)));
 }
 
 /*
@@ -111,7 +115,7 @@ __global__ void klconvs_cuda_forward_kernel(
     const scalar_t* __restrict__ input,
     const scalar_t* __restrict__ p_filt,
     scalar_t* __restrict__ out,
-    const scalar_t* __restrict__ random,
+    scalar_t* __restrict__ random,
     const size_t  filt_h,
     const size_t filt_w,
     const size_t filt_n,
@@ -122,7 +126,7 @@ __global__ void klconvs_cuda_forward_kernel(
     const int totalOutPx,
     const int totalTreads
     ){
-    const int threadlinidx = blockIdx.x*blockDim.x + threadIdx.x;
+    const size_t threadlinidx = blockIdx.x*blockDim.x + threadIdx.x;
     if (threadlinidx < totalOutPx){
         // Calculate Imout Indices
         int int_temp_reg;
@@ -133,44 +137,46 @@ __global__ void klconvs_cuda_forward_kernel(
         const int im_c_idx = (threadlinidx/(int_temp_reg)) % filt_n;
         int_temp_reg *=filt_n;
         const int im_b_idx = (threadlinidx/(int_temp_reg));
+        size_t size_temp_reg;
         float randnum;
         float this_px_out=0;
         float float_temp;
-        // Flags
-       // bool flag = true;
-       // bool flag2= false;
-       // bool isoutboundh = false;
-       // bool isoutbound = false;
-
-        int input_idx=0;
-        //int filt_idx;
-        //int j = 0;
+        size_t input_idx=0;
         int dh;
         int dw;
         int chan;
-        for ( dh= -filt_h/2 ; dh< filt_h/2; dh++){
-            int_temp_reg = dw + im_w_idx;
-            if (int_temp_reg >= inp_h || int_temp_reg < 0){
+        int cur_im_h =0;
+        int cur_im_w =0;
+        for ( dh= 0 ; dh < filt_h; dh++){
+            cur_im_h= dh + im_h_idx - ((filt_h)/2);
+            if (cur_im_h< 0){
+                    continue;
+                            }
+            if (cur_im_h >= inp_h){
                     break;
                 }
-            for (dw = -filt_w/2 ; dw < filt_w/2; dw++ ){
-                int_temp_reg = dw + im_w_idx;
-                if ((int_temp_reg) >= inp_w || int_temp_reg<0){
+
+            for (dw = 0 ; dw < filt_w; dw++ ){
+                cur_im_w = dw + im_w_idx - ((filt_w)/2);
+                if (cur_im_w<0){
+                    continue;
+                }
+                if (cur_im_w >= inp_w){
                     break;
                 }
-                randnum = random[threadlinidx + totalOutPx*(dw+ filt_w*(dh))];// * isoutbound;  // GLOBAL MEM ACCESS
+
+                randnum = random[threadlinidx + totalOutPx*(dw +  filt_w*( dh ))];// * isoutbound;  // GLOBAL MEM ACCESS
                 for  ( chan = 0 ; chan < inp_c; chan++){
                     // find the correct index of filt
                     // get the index val from input
                     // add to final answer;
-                    //filt_idx = ;//[out_chan_id][chan][dh][dw]
-                   // flag2 = //flag && (temp_reg >= randnum) && (!isoutbound);  ////////////GLOBAL MEM ACESSS
-                    int_temp_reg = calcLinInd(dh,dw,chan,im_c_idx,filt_h,filt_w,inp_c);
-                    float_temp = p_filt[int_temp_reg];
+                    size_temp_reg = calcLinInd( dh, dw, chan,im_c_idx, filt_h, filt_w, inp_c);
+                    float_temp = p_filt[size_temp_reg];
                     if (randnum <= float_temp){
-                        input_idx = calcLinInd(im_h_idx + dh, im_w_idx + dw, chan, im_b_idx, inp_h, inp_w, inp_c);
-                         //inp_indices[dh][dw] = input_idx; ////////// GL MEM ACESSS  ////*********** check wether bool*float is float
-                         //randnum = 100;
+                        input_idx = calcLinInd(cur_im_h, cur_im_w, chan, im_b_idx, inp_h, inp_w, inp_c);
+                        //inp_indices[dh][dw] = input_idx; ////////// GL MEM ACCESS  ////*********** check wether bool*float is float
+                        //randnum = 100;
+                        random[threadlinidx + totalOutPx*(dw +  filt_w*( dh ))] = __int2float_rn(chan);
                         break;
                     }
                     //flag = (flag && !flag2);
@@ -188,6 +194,7 @@ __global__ void klconvs_cuda_forward_kernel(
 
     }
 }
+
 /*
 template <typename scalar_t>
 __global__ void klconvs_cuda_forward_kernel_single_loop(
@@ -377,15 +384,77 @@ printf("out_idx %d: left to right %d,%d,%d,%d   with dims %d,%d,%d,%d\n", out_id
 
 
 template <typename scalar_t>
-__global__ void klconvs_cuda_backward_kernel(){}
+__global__ void klconvs_cuda_backward_kernel(
+    const scalar_t* __restrict__ input, //TODO: MAKE sure the dims are dzdin and the threads are compatible
+    const scalar_t* __restrict__ dzdout,
+    const scalar_t* __restrict__ random,
+    float* __restrict__ dzdin,
+    float* __restrict__ dzdl_filt,
+    const size_t  filt_h,
+    const size_t filt_w,
+    const size_t filt_n,
+    const size_t inp_h,
+    const size_t inp_w,
+    const size_t inp_c,
+    const size_t inp_b,
+    const int totalThreads
+){
+    const size_t threadlinidx = blockIdx.x*blockDim.x + threadIdx.x;
+    int int_temp_reg;
+    const int im_w_idx = threadlinidx % inp_w;
+    int_temp_reg =inp_w;
+    const int im_h_idx = (threadlinidx/int_temp_reg) % inp_h;
+    int_temp_reg *=inp_h;
+    const int filt_n_idx = (threadlinidx/(int_temp_reg)) % filt_n;
+    int_temp_reg *=filt_n;
+    const int im_b_idx = (threadlinidx/(int_temp_reg)) % inp_b;
+    int_temp_reg *= inp_b;
+    const int filt_w_idx = (threadlinidx/(int_temp_reg)) % filt_w;
+    int_temp_reg *= filt_w;
+    const int filt_h_idx = (threadlinidx/(int_temp_reg)) ;
+
+    const int inp_w_idx = im_w_idx + filt_w_idx - (filt_w/2) ;
+    const int inp_h_idx = im_h_idx + filt_h_idx - (filt_h/2) ;
+    bool flag = threadlinidx < totalThreads && inp_w_idx >=0 && inp_w_idx <inp_w && inp_h_idx >=0 && inp_h_idx <inp_h;
+    if (flag){
+        // Calculate Imout Indices
+
+        float randnum;
+        float this_px_out=0;
+        float float_temp;
+        // Flags
+       // bool flag = true;
+       // bool flag2= false;
+       // bool isoutboundh = false;
+       // bool isoutbound = false;
+        int chan  = __float2int_rn(random[threadlinidx]);
+        int input_idx=0;
+        //int filt_idx;
+        //int j = 0;
+
+        size_t dzdout_idx = calcLinInd4(im_b_idx,filt_n_idx,im_h_idx,im_w_idx ,inp_b, filt_n, inp_h, inp_w);
+        size_t dzdin_idx = calcLinInd4(im_b_idx , chan , inp_h_idx , inp_w_idx , inp_b, inp_c, inp_h, inp_w);
+//       printf("%d \n",chan);
+        //size_t dzdin_idx = im_b_idx + chan + inp_h_idx + inp_w_idx;
+        size_t dzdl_filt_idx = calcLinInd4(filt_n_idx , chan , filt_h_idx , filt_w_idx, filt_n, inp_c, filt_h, filt_w );
+        float dzdoutthis = dzdout[dzdout_idx];
+//dzdin[0] += dzdoutthis;
+        //dzdin[dzdin_idx] += dzdoutthis;
+        atomicAdd(&(dzdin[dzdin_idx]), dzdoutthis);
+        atomicAdd(&(dzdl_filt[dzdl_filt_idx]), dzdoutthis* input[dzdin_idx]);
+        //dzdl_filt[dzdl_filt_idx] += dzdoutthis* input[dzdin_idx] ;
+    }
+
+
+
+}
 
 // End Kernels *************************
 
 //Forward wrapper ----------------------
-at::Tensor klconvs_cuda_forward(
+std::vector<at::Tensor> klconvs_cuda_forward(
 at::Tensor input,
-at::Tensor log_filt,
-at::Tensor pad){
+at::Tensor log_filt){
 
         at::Tensor p_filt = (at::exp(log_filt));
        // p_filt = p_filt.cumsum(1);
@@ -407,7 +476,12 @@ at::Tensor pad){
         const  int totalThreads = totalOutPx;
         int j = 32;
         const  int threadsperblock =j*32;
-        const dim3 blocks(ceil(totalThreads/threadsperblock));
+        int blockNum = (totalThreads/threadsperblock);
+        if (totalThreads%threadsperblock != 0 ){
+            blockNum++;
+
+        }
+        const dim3 blocks(blockNum);
         //printf("blocks: %d, totaltherads/threadperbloc : %d", blocks,totalThreads/threadsperblock);
 
         AT_DISPATCH_FLOATING_TYPES(input.type(), "klconvs_forward_cuda", ([&] {
@@ -433,14 +507,65 @@ at::Tensor pad){
         //out = out.sum(0);  /// ZEro Loop Version \TODO: rremove in case of diff kernel
         gpuErrchk( cudaPeekAtLastError() );
         gpuErrchk( cudaDeviceSynchronize() );
-        return out;
+        return {out,random};
 
 }
 //----------------------------------------------
 // Backward wrapper
-std::vector<at::Tensor> klconvs_cuda_backward(at::Tensor grad_out,
+std::vector<at::Tensor> klconvs_cuda_backward(at::Tensor dzdout,
 at::Tensor input,
 at::Tensor log_filt,
-at::Tensor pad){
-return {input, log_filt};
+at::Tensor random
+){
+
+const auto batch_sz = input.size(0);
+const auto im_height = input.size(2);
+const auto im_width = input.size(3);
+const auto im_nchans = input.size(1);
+
+const auto filt_num = log_filt.size(0);
+const auto filt_height = log_filt.size(2);
+const auto filt_width = log_filt.size(3);
+
+auto dzdinput = at::zeros_like(input);
+auto dzdlfilt = at::zeros_like(log_filt);
+
+
+// Single Loop const auto totalThreads = totalOutPx*filt_height*filt_width;
+const  int totalThreads = im_height*im_width*batch_sz*filt_num*filt_height*filt_width;
+int j = 32;
+const  int threadsperblock =j*32;
+int blockNum = (totalThreads/threadsperblock);
+if (totalThreads%threadsperblock != 0 ){
+    blockNum++;
+}
+const dim3 blocks(blockNum);
+//printf("blocks: %d, totaltherads/threadperbloc : %d", blocks,totalThreads/threadsperblock);
+
+    AT_DISPATCH_FLOATING_TYPES(input.type(), "klconvs_backward_cuda", ([&] {
+       klconvs_cuda_backward_kernel<scalar_t><<<blocks, threadsperblock>>>(
+          input.data<scalar_t>(),
+          dzdout.data<scalar_t>(),
+          random.data<scalar_t>(),// rand . data please fix
+          dzdinput.data<float>(),
+          dzdlfilt.data<float>(),
+          filt_width,
+          filt_height,
+          filt_num,
+          im_width,
+          im_height,
+          im_nchans,
+          batch_sz,
+          totalThreads
+            );
+      }));
+
+
+        //out = out.sum(0);  /// ZEro Loop Version \TODO: rremove in case of diff kernel
+        gpuErrchk( cudaPeekAtLastError() );
+        gpuErrchk( cudaDeviceSynchronize() );
+
+
+
+return {dzdinput, dzdlfilt};
 }

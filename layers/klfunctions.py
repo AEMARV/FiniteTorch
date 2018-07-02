@@ -7,6 +7,7 @@ from typing import List,Tuple,Dict
 from torch.distributions import Multinomial
 from torch.distributions import Dirichlet
 from torch import Tensor
+import klconvs
 import argparse
 def sample(lp:Tensor,axis:int,numsamples):
 	lastaxis = lp.ndimension() -1
@@ -16,6 +17,21 @@ def sample(lp:Tensor,axis:int,numsamples):
 	samps = M.sample()
 	samps = samps.transpose(lastaxis,axis)/numsamples
 	return samps
+class KLConvStoch(Function):
+	@staticmethod
+	def forward(ctx, input, log_filt):
+		input.detach()
+		log_filt.detach()
+		output,random = klconvs.forward(input, log_filt)
+		ctx.save_for_backward(input, log_filt, random)
+		return output
+
+	@staticmethod
+	def backward(ctx, grad_outputs):
+		grad_outputs.detach()
+		input, log_filt,random = ctx.saved_tensors
+		dzdin , dzdlog_filt = klconvs.backward(grad_outputs,input,log_filt,random)
+		return dzdin, dzdlog_filt
 class LogSumExpStoch(Function):
 	''' Takes log sum exp along axis 1'''
 	@staticmethod
