@@ -6,8 +6,8 @@ import time
 import typing
 from torch import Tensor
 dev = torch.device("cuda:0")
-testinput = torch.rand(1,2,3,3,dtype=torch.float32).to(dev) # type: Tensor
-testfilt = torch.rand(1,2,3,3,dtype=torch.float32).to(dev) **10 # type: Tensor
+testinput = torch.rand(100,128,32,32,dtype=torch.float32).to(dev) # type: Tensor
+testfilt = torch.rand(100,128,3,3,dtype=torch.float32).to(dev) **10 # type: Tensor
 testfilt = testfilt / testfilt.sum(dim=1,keepdim=True)
 testfilt = (testfilt.log())
 testfilt.detach()
@@ -23,7 +23,7 @@ elapsedtorch=0
 elapsed_back_mine = 0
 temptime =0
 pad = torch.ones(4,1).to(dev)
-trials = 1000
+trials = 10
 dzdout,rand_sample =klconvs.forward(testinput, testfilt)
 dzdout = dzdout *0 + 1
 dzdin_mine = 0
@@ -41,7 +41,7 @@ for i in range(trials):
 	dzdfilt_mine += dzdfilt_mine_temp
 	elapsed_back_mine += temptime
 	t = time.time()
-	torchout = F.conv2d(testinput, testfilt.exp(), bias=None, stride=1, padding=(1,1))
+	torchout = F.conv2d(testinput, testfilt.exp(), bias=None, stride=1, padding=1)
 	loss = torchout.sum()  # type: Tensor
 	loss.backward()
 	if i == 0:

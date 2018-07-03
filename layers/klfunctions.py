@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import torch.functional
+import torch.nn.functional as F
 from torch.autograd import Function,Variable
 import torch.nn
 from typing import List,Tuple,Dict

@@ -103,10 +103,10 @@ class KLConv(KLConv_Base):
 		raise(Exception('This KLD is not implemented!'))
 
 	def forward(self, x:torch.Tensor):
-		if self.training:
+		if self.training and self.isstoch :
 			y = KLConvStoch.apply(x,self.get_log_kernel())
 		else:
-			y=  self.kl_xl_kp(x)
+			y = self.kl_xl_kp(x)
 		return y
 
 

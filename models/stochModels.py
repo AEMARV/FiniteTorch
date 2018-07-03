@@ -22,17 +22,22 @@ def hello_stoch_hello_kl() -> allOpts:
 	model_string = ''
 	d = '->'
 	nl = 'lnorm|s:0'
-	convparams = 'param:logunif,stoch:0'
+	convparams = 'param:logunif'
 	finish = 'fin'
 	model_string += 'inplog'+d
-	model_string += 'klconv|r:3,f:32,pad:same,bias:0,{}'.format(convparams) + d + nl + d
-	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
-	model_string += 'klconv|r:3,f:64,pad:same,bias:0,{}'.format(convparams) + d + nl + d
-	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2,bias:1,stoch:1'    + d + nl + d
-	model_string += 'klconv|r:3,f:64,pad:same,bias:0,{}'.format(convparams) + d + nl + d
-	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1,stoch:1'         + d + nl + d
-	model_string += 'klconv|r:1,f:10,pad:valid,bias:0,{}'.format(convparams) + d + nl + d
-	model_string += 'klavgpool|r:4,pad:valid,stride:1,bias:1,stoch:1,isglobal:true' + d + nl + d
+	model_string += 'klconv|r:3,f:32,pad:same,bias:0,param:log,stoch:1' + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2'    + d + nl + d
+	model_string += 'klconv|r:3,f:64,pad:same,bias:0,{},stoch:1'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,f:32,pad:same,stride:2'    + d + nl + d
+	model_string += 'klconv|r:3,f:128,pad:same,bias:0,{},stoch:1'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1'         + d + nl + d
+	model_string += 'klconv|r:3,f:256,pad:same,bias:0,{},stoch:1'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d + nl + d
+	model_string += 'klconv|r:3,f:64,pad:same,bias:0,{},stoch:1'.format(convparams) + d + nl + d
+	model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1'         + d + nl + d
+
+	model_string += 'klconv|r:1,f:10,pad:valid,bias:0,{},stoch:0'.format(convparams) + d + nl + d
+	#model_string += 'klavgpool|r:2,pad:valid,stride:1,bias:1,stoch:1,isglobal:true' + d + nl + d
 	model_string += finish
 
 	''' Net Options'''
@@ -48,7 +53,7 @@ def hello_stoch_hello_kl() -> allOpts:
 	                      nestrov=False)
 	'''Epocher Options'''
 	opts_epocher = EpocherOpts(epochnum=3000,
-	                           batchsz=100,
+	                           batchsz=20,
 	                           shuffledata=True,
 	                           loss=torch.nn.NLLLoss(),
 	                           numworkers=1,
