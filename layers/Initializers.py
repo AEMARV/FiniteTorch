@@ -7,9 +7,10 @@ import torch
 from typing import List,Tuple,Dict
 ''' Interface Class'''
 class Parameterizer(object):
-	def __init__(self,isstoch=True,isbinary=False,dtype=torch.float32):
+	def __init__(self,isstoch=False,isbinary=False,dtype=torch.float32, coef=1):
 		self.isstoch = isstoch
 		self.isbinary = isbinary
+		self.coef = coef
 		if self.isbinary:
 			self.normaxis = 4
 		else:
@@ -47,8 +48,6 @@ class LogParameter(Parameterizer):
 		self.isuniform = isuniform
 		self.isbinary = isbinary
 		self.isdirichlet= isdirichlet
-		#if isuniform and not(isstoch):
-		#	raise(Warning('Uniform Parameterizaiton, while being not stochastic'))
 		self.isuniform = isuniform
 
 	def __call__(self, shape:Tuple)->Tensor:
@@ -56,25 +55,40 @@ class LogParameter(Parameterizer):
 			self.normaxis=4
 			shape = shape + (2,)
 		out = torch.empty(shape)
-		out = out.exponential_()
+		out = -out.exponential_()
 		if self.isdirichlet:
 			out = out / out.sum(dim=self.normaxis,keepdim=True)
 			out = out.clamp(epsilon, 1)
 			out = out.log()
 		if self.isuniform:
 			out = out * 0
+
+		out = out * self.coef
 		return out.detach_()
 	def get_log_norm(self,k:Tensor)->Tensor:
-		lognorm = self.normfunc(k,self.normaxis,100)
+		lognorm = self.normfunc(k,self.normaxis,1)
 		return lognorm
 	def get_log_kernel(self,k:Tensor)->Tuple[Tensor]:
 		k =  k- self.get_log_norm(k)
-		#return k[0:,0:,0:,0:,0], k[0:,0:,0:,0:,1]
 		return k
 	def get_prob_kernel(self,k:Tensor)->Tensor:
 		k = self.get_log_kernel(k)
 		k = k.exp()
 		return k
+
+
+class NormalParameter(Parameterizer):
+	def __init__(self, **kwargs):
+		super(NormalParameter, self).__init__(**kwargs)
+	def __call__(self, shape,coef):
+		out = torch.empty(shape) # type:Tensor
+		out.normal_(0,1) # type: Tensor
+		out =  out / ((out ** 2).sum(dim=self.normaxis, keepdim=True)).sqrt_()
+		out = out * coef
+		return out.detach_()
+	def get_kernel(self,k:Tensor):
+		return k / ((k ** 2).sum(dim=self.normaxis, keepdim=True)).sqrt_()
+
 
 class SphereParameter(Parameterizer):
 	def __init__(self,

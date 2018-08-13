@@ -11,3 +11,7 @@ OPTS_DATASET_SPATIAL = 'datarcdim'
 OPTS_OPTMIZER = 'optimizer'
 OPTS_MODEL = 'model'
 epsilon = 1e-7
+
+#Result defs
+RESULT_ROOT_DIR = './results'
+EXP_RESULT_ROOT_DIR = './experiment_conclude'

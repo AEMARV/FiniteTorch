@@ -2,25 +2,40 @@ from models.modelutils import *
 from data.datasetutils import *
 from trainvalid.optimizer import *
 from trainvalid.epocher import *
-if __name__ == '__main__':
-	model_names = ['hello_stoch_hello_kl']
-	dataset_names = ['cifar10']
-	for dataset_name in dataset_names:
-		for model_name in model_names:
-			# Get Model Module and Optimizer
-			model_module, opts = get_model_module(model_name)
-			# Create Iterable for Training
-			trainset, testset, opts = create_data_set(dataset_name,opts)
-			# Create Optimizer
-			optmizer = create_optimizer(opts,model_module)
-			#TODO: PRINT OPTIONS
-			#TODO: Train and Validate model
-			epocher = Epocher(model_module,
-                              optmizer,
-			                  trainset,
-			                  testset,
-			                  opts.epocheropts,
-			                  opts)
-			epocher.run_many_epochs()
+from experiment.Experiments import *
 
+def boolprompt(question):
+	answer=''
+	while(answer.lower!='n' or answer.lower()!='y'):
+		answer = input(question+' [y]/[n]')
+		if answer[0].lower()=='y':
+			return True
+		elif answer[0].lower()=='n':
+			return False
+		else:
+			print('please answer with y/n characters')
+
+
+
+if __name__ == '__main__':
+	exp1 = FiniteReLUStochGrad(3)
+	exp2 = FiniteReLU(3)
+	exp1.run()
+	exp2.run()
+	# experiment_name = 'Baselines'
+	# model_names = ['quick_cifar']
+	# dataset_names = ['cifar100']
+	# save_result = boolprompt('Do you want to save the results?')
+	# epocheropts = EpocherOpts(save_result,
+	#                           epochnum=150,
+	#                           batchsz=100,
+	#                           shuffledata=True,
+	#                           numworkers=1,
+	#                           gpu=True)
+	# for dataset_name in dataset_names:
+	# 	for model_name in model_names:
+	# 		xp_dscrpt = [experiment_name,dataset_name,model_name]
+	# 		opts = create_opts(experiment_name,dataset_name,model_name,epocheropts)
+	# 		epocher = Epocher(opts)
+	# 		epocher.run_many_epochs()
 
