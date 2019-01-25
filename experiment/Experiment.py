@@ -28,16 +28,20 @@ def boolprompt(question):
 			print('please answer with y/n characters')
 
 class Experiment_(object):
-	def __init__(self,trial):
+	def __init__(self,trial,save_results=None):
 		self.name=type(self).__name__
 
-		self.opt_list=[]
-		self.trials=trial
-		self.writer=None
-		self.summary_dir=None
-		self.result_dir=None
-		self.save_results= boolprompt('Do you want to save the results?')
-		self.override = boolprompt('Do you want to override the results if they exist?')
+		self.opt_list = []
+		self.trials = trial
+		self.writer = None
+		self.summary_dir = None
+		self.result_dir = None
+		if save_results is None:
+			self.save_results= boolprompt('Do you want to save the results?')
+			self.override = boolprompt('Do you want to override the results if they exist?')
+		else:
+			self.save_results = True
+			self.override = True
 		if self.save_results:
 			self.summary_dir,exist = self.force_create_path(['.', 'Experiment Results', self.name])
 			self.result_dir,exist = self.force_create_path(['.', 'Results', self.name])

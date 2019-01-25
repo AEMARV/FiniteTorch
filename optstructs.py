@@ -3,7 +3,8 @@ from torch.nn import Module
 from definition import *
 from torchvision.transforms import transforms
 import torchvision as tv
-
+import test_finite.dataset_utils
+from test_finite.dataset_utils import Joint
 '''Model Imports'''
 class allOpts(object):
 	def __init__(self,
@@ -52,15 +53,19 @@ class NetOpts(object):
 	''' Weight and bias init has the form
 		lambda x: x.zero_()'''
 	def __init__(self,modelstring,
+	             input_channelsize,
 	             inputspatszvalidator,
 	             data_transforms=[],
 	             classicNet=False,
 	             weightinit=lambda x: x,
 				 biasinit=lambda x: x,
+	             customdict=dict(exact=True)
 				 ):
 		self.inputspatszvalidator=inputspatszvalidator
 		self.modelstring = modelstring
 		self.classicNet=classicNet
+		self.customdict = customdict
+		self.input_channelsize= input_channelsize
 		if classicNet and (not chck_lambda(weightinit) or not chck_lambda(biasinit) or not chck_lambda(inputspatszvalidator)) :
 			raise Exception('Weight/bias init and size validators must be lambda functions\n W/B inits must be called on weight.data or param.data')
 		self.weightinit=weightinit
@@ -89,11 +94,11 @@ class OptimOpts(object):
 		self.loss=loss
 
 class DataOpts(object):
-	def __init__(self,name
+	def __init__(self,name,inputdim=0,outputdim=0,samplenum=0
 				 ):
 		self.datasetname=name
-
-
+		self.trainset = None
+		self.testset = None
 		if name == 'cifar10':
 			inputspatsz=32
 			channelsize=3
@@ -105,14 +110,43 @@ class DataOpts(object):
 			channelsize=3
 			inputrange=(0,1)
 			classnum=100
-
+		elif name == 'synthetic':
+			self.joint = Joint(inputdim,outputdim)
+			inputspatsz = 1
+			channelsize = inputdim
+			inputrange = (0,1)
+			self.samplenum = samplenum
+			classnum = outputdim
 		else:
 			raise Exception(name + ':Dataset options are not defined')
 		self.inputspatsz = inputspatsz
 		self.channelsize = channelsize
 		self.inputrange = inputrange
 		self.classnum = classnum
+	def get_loaders(self,opts:allOpts):
+		if self.datasetname == 'cifar10':
+			return self.get_cifar10(opts)
+		elif self.datasetname == 'cifar100':
+			return self.get_cifar100(opts)
+		elif self.datasetname == 'synthetic':
+			return self.get_synth(opts)
+		else:
+			Exception("Dataset Not Found")
 
+	def get_synth(self,opts:allOpts):
+
+		self.trainset = self.joint.create_dataset(self.samplenum[0])
+		self.testset = self.joint.create_dataset(self.samplenum[1])
+		batchsz = opts.epocheropts.batchsz
+		isshuffle = opts.epocheropts.shuffledata
+		transform = transforms.Compose(
+			[transforms.ToTensor()] + opts.netopts.data_transforms)
+		# Construct loaders
+		train_loader = torch.utils.data.DataLoader(self.trainset, batch_size=batchsz, shuffle=isshuffle, sampler=None,
+		                                           num_workers=1)
+		test_loader = torch.utils.data.DataLoader(self.testset, batch_size=batchsz, shuffle=isshuffle, sampler=None,
+		                                          num_workers=1)
+		return train_loader, test_loader
 	def get_cifar10(self,opts: allOpts):
 		# Obtain options from opts class
 		batchsz = opts.epocheropts.batchsz

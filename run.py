@@ -18,10 +18,10 @@ def boolprompt(question):
 
 
 if __name__ == '__main__':
-	exp1 = FiniteReLUStochGrad(3)
-	exp2 = FiniteReLU(3)
-	exp1.run()
-	exp2.run()
+	#exp = Quickie(1)
+	#exp = Synthetic_PMaps(1)
+	exp = QuickCifar(1)
+	exp.run()
 	# experiment_name = 'Baselines'
 	# model_names = ['quick_cifar']
 	# dataset_names = ['cifar100']

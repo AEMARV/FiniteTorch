@@ -1,8 +1,9 @@
 Results/
+GenImages/
 data/datasets/
 Archived_Results/
+ Experiment Results/
 PreprocessData/
-Experiment Results/
 .idea/
 *.pyc
 .gitignore~

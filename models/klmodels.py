@@ -114,7 +114,6 @@ def finite_nin_caffe(data_opts: DataOpts, isrelu=True,isnormstoch=False) -> Tupl
 	                   weightinit=lambda x: x.normal_(0, 0.05),
 	                   biasinit=lambda x: x.zero_(),
 	                   )
-	'''Optimizer Options'''
 	opts_optim = OptimOpts(lr=1,
 	                       lr_sched_lambda=lr_sched,
 	                       type='SGD',
@@ -124,6 +123,7 @@ def finite_nin_caffe(data_opts: DataOpts, isrelu=True,isnormstoch=False) -> Tupl
 	                       nestrov=False,
 	                       loss=NLLLoss(reduce=False)
 	                       )
+	'''Optimizer Options'''
 
 	return opts_net, opts_optim
 

@@ -44,22 +44,92 @@ def get_init(initstring:str)->Parameterizer:
 	else:
 		isdirichlet = False
 	if 'log' in initstring:
-		init = LogParameter(isstoch=isstoch,isuniform=isuniform,isdirichlet=isdirichlet)
+		if 'proj' in initstring:
+			init = LogParameterProjector(isstoch=isstoch, isuniform=isuniform, isdirichlet=isdirichlet)
+		else:
+			init = LogParameter(isstoch=isstoch,isuniform=isuniform,isdirichlet=isdirichlet)
 	elif 'sphere' in initstring:
 		init = SphereParameter(isstoch=isstoch, isuniform=isuniform, isdirichlet=isdirichlet)
 	return init
 
-def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
+def parse_layer_string(layer_string,in_n_channel,in_icnum,blockidx_dict):
 	out_n_channel = -1
+	out_icnum = in_icnum
 	layer_name_str,layer_opts = parse_layer_opts(layer_string)
 	if layer_name_str not in blockidx_dict.keys():
 		blockidx_dict[layer_name_str] = 1
 	blockidx = blockidx_dict[layer_name_str]
 	if layer_name_str == 'fin':
-		return None,in_n_channel
+		return None,in_n_channel,out_icnum
 
 	# -------------------------------------------------------------------Finite Convs
 	elif layer_name_str == 'klconv':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		indpt_components = int(layer_opts['icnum']) if 'icnum' in layer_opts.keys() else 1
+		stride = int(layer_opts['stride']) if 'stride' in layer_opts.keys() else 1
+		coef = float(layer_opts['coef'])
+		isbiased = ((layer_opts['bias']=='1')) if 'bias' in layer_opts.keys() else False
+		isrelu = bool(int(layer_opts['isrelu']))
+		drop_prob = float(layer_opts['droprate']) if 'droprate' in layer_opts.keys() else 0
+		#stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
+		pad = layer_opts['pad']
+		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
+		param = get_init(layer_opts['param'])
+		layer = KLConv(fnum=fnum,
+		               kersize=ksize,
+		               inp_chan_sz=in_n_channel,
+		               inp_icnum= in_icnum,
+		               icnum=indpt_components,
+		               isbiased=isbiased,
+		               isrelu=isrelu,
+		               biasinit=None,
+		               padding=pad,
+		               paraminit=param,
+		               isstoch=stoch,
+		               coefinit=coef,
+		               stride=stride,
+		               drop_rate = drop_prob,
+		               blockidx=blockidx)
+		out_n_channel = fnum
+		out_icnum= indpt_components
+	elif layer_name_str == 'map':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'])
+		coef = float(layer_opts['coef'])
+		isrelu = bool(int(layer_opts['isrelu']))
+		islast = bool(int(layer_opts['islast'])) if 'islast' in layer_opts.keys() else False
+		sampopt = int(layer_opts['sampopt']) if 'sampopt' in layer_opts.keys() else 0
+		indpt_components = int(layer_opts['icnum']) if 'icnum' in layer_opts.keys() else 1
+		drop_prob = float(layer_opts['droprate']) if 'droprate' in layer_opts.keys() else 0
+		isbiased = ((layer_opts['bias'] == '1')) if 'bias' in layer_opts.keys() else False
+		exact = bool(int(layer_opts['exact'])) if 'exact' in layer_opts.keys() else False
+		#stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
+		pad = layer_opts['pad']
+		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
+		param = get_init(layer_opts['param'])
+		layer = BayesFunc(fnum=fnum,
+		                icnum=indpt_components,
+		               kersize=ksize,
+		               inp_chan_sz=in_n_channel,
+		               inp_icnum = in_icnum,
+		               isbiased=isbiased,
+		               isrelu=isrelu,
+		               biasinit=param,
+		               samplingtype=sampopt,
+		               padding=pad,
+		               stride=stride,
+		               paraminit=param,
+		               isstoch=stoch,
+		               coefinit=coef,
+		               exact=exact,
+					   islast=islast,
+		               blockidx=blockidx)
+		out_n_channel = fnum
+		out_icnum = indpt_components
+
+	elif layer_name_str == 'mdconv':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
 		coef = float(layer_opts['coef'])
@@ -68,7 +138,7 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		pad = layer_opts['pad']
 		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
 		param = get_init(layer_opts['param'])
-		layer = KLConv(fnum=fnum,
+		layer = MDConv(fnum=fnum,
 		               kersize=ksize,
 		               inp_chan_sz=in_n_channel,
 		               isbiased=False,
@@ -80,6 +150,7 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		               coefinit=coef,
 		               blockidx=blockidx)
 		out_n_channel = fnum
+
 	elif layer_name_str == 'jconv':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
@@ -103,6 +174,7 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 	elif layer_name_str == 'spconv':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'])
 		isrelu = bool(int(layer_opts['isrelu'])) if 'isrelu' in layer_opts else True
 		#stride = int(layer_opts['stride'] if 'stride' in layer_opts else 1)
 		pad = layer_opts['pad']
@@ -117,14 +189,17 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		               padding=pad,
 		               paraminit=param,
 		               isstoch=stoch,
+		               stride=stride,
 		               blockidx=blockidx)
 		out_n_channel = fnum
 
 	elif layer_name_str == 'klconvb':
 		ksize = int(layer_opts['r'])
 		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'])
 		coef = float(layer_opts['coef'])
 		#stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
+		isbiased = ((layer_opts['bias'] == '1')) if 'bias' in layer_opts.keys() else False
 		isrelu = bool(int(layer_opts['isrelu']))
 		pad = layer_opts['pad']
 		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
@@ -132,13 +207,14 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		layer = KLConvB(fnum=fnum,
 		               kersize=ksize,
 		               inp_chan_sz=in_n_channel,
-		               isbiased=False,
+		               isbiased=isbiased,
 		               isrelu=isrelu,
-		               biasinit=None,
+		               biasinit=param,
 		               padding=pad,
 		               paraminit=param,
 		                isstoch=stoch,
 		                coefinit=coef,
+		                stride=stride,
 		                blockidx=blockidx)
 		out_n_channel = fnum
 	elif layer_name_str == 'mixer':
@@ -155,6 +231,30 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		              isstoch=stoch,
 		              blockidx=blockidx)
 		out_n_channel = fnum
+	elif layer_name_str == 'transit':
+		ksize = 1
+		fnum = int(layer_opts['f'])
+		stoch = bool(layer_opts['stoch']=='1')
+		bias = bool(layer_opts['stoch'] == '1')
+		param = get_init(layer_opts['param'])
+		layer = Transitioner(fnum=fnum,
+		              kersize=1,
+		              inp_chan_sz=in_n_channel,
+		              isbiased=False,
+		              paraminit=param,
+		              isstoch=stoch,
+		              blockidx=blockidx)
+		out_n_channel = fnum
+
+	elif layer_name_str == 'nfmarkov':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		layer = NonFactMarkov(fnum=fnum,
+			                  kersize=ksize,
+			                  inp_chan_sz=in_n_channel,
+			                  blockidx=blockidx)
+		out_n_channel = fnum
+
 	# -------------------------------------------------------------------Finite POOLS
 	elif layer_name_str == 'klavgpool':
 		ksize = int(layer_opts['r'])
@@ -165,17 +265,23 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 	elif layer_name_str == 'glklavgpool':
 		layer = KLAvgPoolGL(blockidx=blockidx)
 		out_n_channel = in_n_channel
+		out_icnum = 1
 	# -------------------------------------------------------------------Finite Activations
 	elif layer_name_str == 'lnorm':
-		isstoch = bool(layer_opts['s']=='1')
-		layer = LNorm(isstoch=isstoch,blockidx=blockidx)
+		isstoch = bool(layer_opts['s']=='1') if 's' in  layer_opts.keys() else False
+		regulated = bool(layer_opts['reg'] == '1') if 'reg' in layer_opts.keys() else False
+		layer = LNorm(isstoch=isstoch,blockidx=blockidx,isregulated=regulated)
 		out_n_channel = in_n_channel
 	elif layer_name_str == 'l2norm':
 		layer = L2Norm()
 		out_n_channel = in_n_channel
 	elif layer_name_str == 'l2lpnorm':
 		# Normalizes the input(l2) and outputs the log probs
-		layer = L2LogProb()
+		layer = L2LogProb(blockidx=blockidx)
+		out_n_channel = in_n_channel
+	elif layer_name_str== 'kdrop':
+		rate = float(layer_opts['p'])
+		layer = KLDrop(rate,blockidx=blockidx)
 		out_n_channel = in_n_channel
 	# -------------------------------------------------------------------Input Transformers
 	elif layer_name_str == 'inplog':
@@ -199,6 +305,12 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		out_n_channel = fnum
 	elif layer_name_str == 'relu':
 		layer = nn.ReLU()
+		out_n_channel = in_n_channel
+	elif layer_name_str == 'sigmoid':
+		layer = nn.Sigmoid()
+		out_n_channel = in_n_channel
+	elif layer_name_str == 'lsigmoid':
+		layer = nn.LogSigmoid()
 		out_n_channel = in_n_channel
 	elif layer_name_str == 'maxpool':
 		ksize = int(layer_opts['r'])
@@ -228,4 +340,4 @@ def parse_layer_string(layer_string,in_n_channel,blockidx_dict):
 		raise('Output Channel Num not assigned in :' + layer_name_str)
 
 	blockidx_dict[layer_name_str] = blockidx_dict[layer_name_str]+1
-	return layer, out_n_channel
+	return layer, out_n_channel,out_icnum
