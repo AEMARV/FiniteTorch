@@ -126,7 +126,7 @@ def vgg(data_opts:DataOpts) -> Tuple[NetOpts,OptimOpts]:
 	model_string += 'conv|r:3,f:256,pad:same,bias:1' + d + nl + d + 'bn' + d + 'dropout|p:0.4' + d
 	model_string += 'conv|r:3,f:256,pad:same,bias:1' + d + nl + d
 	model_string += 'maxpool|r:2,pad:valid,stride:2,bias:1' + d
-	model_string += 'conv|r:3,f:512,pad:same,bias:1' + d + nl + d + 'bn' + d + 'dropout|p:0.4' + d
+	model_string += 'conv|r:3,f:512,pad:same. 1 +,bias:1' + d + nl + d + 'bn' + d + 'dropout|p:0.4' + d
 	model_string += 'conv|r:3,f:512,pad:same,bias:1' + d + nl + d + 'bn' + d + 'dropout|p:0.4' + d
 	model_string += 'conv|r:3,f:512,pad:same,bias:1' + d + nl + d
 	model_string += 'maxpool|r:2,pad:valid,stride:2,bias:1' + d

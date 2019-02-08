@@ -47,7 +47,7 @@ def sample(lp:Tensor,axis=1,numsamples=1,MAP=False):
 	logprob[logprob!=logprob] = float('Inf')
 	logprob = logprob.min(dim=axis,keepdim=True)[0]
 
-	logprob = logprob.sum(dim=(1,2,3),keepdim=True)
+	#logprob = logprob.sum(dim=(1,2,3,4),keepdim=True)
 	return samps.detach(),logprob
 
 

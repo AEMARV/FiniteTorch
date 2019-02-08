@@ -86,7 +86,7 @@ class Epocher(object):
 		lprob_currect= 0
 		while True:
 			index += input.shape[0]
-			output,logprob,logprob_model= self.model(input)
+			output,logprob,modelprob= self.model(input)
 			outputsample,logprob_out = sample(output,1,1)
 			logprob = logprob.squeeze() + logprob_out.sum(dim=(2,3),keepdim=True).squeeze() #+ minprob.squeeze()
 			outputlabelsample = outputsample.max(dim=1,keepdim=True)[1]
@@ -99,21 +99,22 @@ class Epocher(object):
 
 			loss = self.opts.optimizeropts.loss(output.view(-1,self.opts.dataopts.classnum),labels)
 			if index/batchsz ==1:
-				runloss = (loss).detach()
+				runloss = (loss.mean()).detach()
 				runoutput = output.detach()
 
 			lprob_currect += (((-logprob.squeeze() * (to_be_summed.float())) / batchsz).sum()).detach()
-			loss = (-logprob.squeeze()*((to_be_summed).float()))/batchsz
+			loss = ((-logprob.squeeze())*((to_be_summed).float()))/batchsz
 			if to_be_summed.float().sum()>0:
 				pass
 				loss.sum().backward()
+			if to_be_summed.all():
+
+				break
 			input = self.logical_index(input,to_be_summed^1)
 			labels = self.logical_index(labels,to_be_summed^1)
 
-			if to_be_summed.all():
-				runloss = (runloss).mean()
-				runoutput = (runoutput)
-				break
+
+
 		index = float(index)/float(batchsz)
 		return runloss,runoutput,index,lprob_currect
 
@@ -176,9 +177,10 @@ class Epocher(object):
 		int_index= booleanind.nonzero().squeeze()
 		return batch.index_select(dim=0,index=int_index)
 
-	def run_epoch(self,prefixprint:str,epoch)->dict:
+	def run_epoch(self,prefixprint:str,epoch,path)->dict:
 		run_loss = 0.0
 		run_lprob_correct=0.0
+		trytotal = 0
 		corrects = 0
 		totalsamples = 0
 		self.model.train()
@@ -192,90 +194,54 @@ class Epocher(object):
 				fix_batch= inputs[0:min(inputs.shape[0],30),0:,0:,0:]
 				fix_labels = labels[0:min(inputs.shape[0],30)]
 				fix_batch = self.order_batch_by_label(fix_batch,fix_labels)
-			#inputs = fix_batch
-			#labels = fix_labels
 			self.optimizer.zero_grad()
 			for i in range(1):
 				log_prob_correct_temp=torch.zeros(1)
-				trys=1
 				if not self.opts.netopts.customdict["exact"]:
 					# Stochastic
 					loss,output,trys,log_prob_correct_temp = self.backward_reject_stoch(inputs,labels)
+					outputfull = output
 				else:
-
 					trys= 1
 					# Exact
 					output,logprob,model_prob = self.model(inputs)
-					#output = output - output.max(dim=1,keepdim=True)[0]
-					#sampleoutput,logprob_out = sample(output,1,1)
-					#logprob = logprob_out
-					#corr = (sampleoutput.max(dim=1)[1].squeeze()== labels).float()
-					#loss_err_acc = ((2*corr -1).squeeze()*(logprob.squeeze())).mean()
-					#(-loss_err_acc).backward()
 					outputfull = output
 					output = output.view(-1, self.opts.dataopts.classnum)
 					loss = self.opts.optimizeropts.loss(output, labels).mean()
-					(loss+ (-model_prob/50000)).backward()
+					(loss).backward()
+
+
 			if self.opts.netopts.customdict['divgreg']:
 				while(True):
 					data = next(regloader)
 					inputs, _ = data
-					inputs, _ = inputs.to(self.opts.epocheropts.device), labels.to(self.opts.epocheropts.device)
+					inputs = inputs.to(self.opts.epocheropts.device)
+					# Creates Uniform Inputs
 					uniforminput= inputs
-					uniforminput=  (inputs.exponential_()).clamp(definition.epsilon,None)
-					uniforminput = uniforminput / uniforminput.sum(dim=1,keepdim=True)
-					uniforminput = uniforminput.log()
-
-
-					output_this,_,_ = self.model(uniforminput)
-					output_unif = output_this.exp()*0
-					output_unif = output_unif - output_unif.logsumexp(dim=1,keepdim=True)
-					divg=(output_unif - output_this)
-					divg = divg.min(dim=1,keepdim=True)[0]
-
-					divgsamp = ((divg.exp()) > torch.rand_like(divg)).float()
-					if divgsamp.sum()==0:
+					#uniforminput=  (inputs.exponential_()).clamp(definition.epsilon,None)
+					#uniforminput = uniforminput / uniforminput.sum(dim=1,keepdim=True)
+					#uniforminput = uniforminput.log()
+					output_this,logprob,model_prob = self.model(uniforminput)
+					unifoutput = output_this*0
+					unifoutput= unifoutput - unifoutput.logsumexp(dim=1,keepdim=True)
+					divgout = -(-(unifoutput - output_this).min(dim=1,keepdim=True)[0]).relu()
+					accepts= (divgout.exp() > torch.rand_like(divgout)).float()
+					if accepts.sum()==0:
 						continue
-					#divg= ((divgsamp * divg).sum(dim=0))/divgsamp.sum()
-					divg = divg.mean()/5e4
+					reg_loss = -(divgout + logprob)*accepts/(accepts.sum())
+					reg_loss = reg_loss.sum()/50000
+					#divg = -model_prob.mean()*self.opts.netopts.customdict['divgregcoef']
+					#divg = logprob.mean() * self.opts.netopts.customdict['divgregcoef']
 					break
 
-				(-divg).backward()
+				(reg_loss).backward()
 
-
-				# Loss Components
-				#log_prob = self.model.get_log_prob()
-				#regularizer = self.model.get_reg_vals()
-
-				#raw_loss = self.opts.optimizeropts.loss(output.view(-1, self.opts.dataopts.classnum), labels).mean()
-				#loss= regularizer
-				# End Loss Components
-				#raw_loss = loss.mean()
-
-
-
-			if (batch_n+1) % 1 ==0:
-				#paramlist = list(self.model.parameters())
-				#self.block_grad(paramlist,ind =paramlist.__len__()- (epoch//1)%paramlist.__len__())
-				#self.optimizer.step()
-				#self.optimizer.zero_grad()
-				here = False
-				if here and not self.opts.netopts.customdict['exact']:
-					uniforminput = inputs * 0
-					uniforminput = uniforminput - uniforminput.logsumexp(dim=1,keepdim=True)
-					output_tmp, maxprob, model_prob  = self.model.forward(uniforminput,MAP=True)
-					_, logprob_out = sample_map(output_tmp, 1, 1)
-					maxprob = maxprob.squeeze() + logprob_out.sum(dim=(2, 3,4), keepdim=True).squeeze()
-					(maxprob/50000).mean(dim=0).backward()
-				self.optimizer.step()
-				self.optimizer.zero_grad()
+			self.optimizer.step()
+			self.optimizer.zero_grad()
 
 			''' Print Output'''
-			#self.model.print(fix_batch,epoch,batch_n)
-			#expected_logprob = log_prob.mean()
-			#expected_regularizer = regularizer.mean()
 			#TODO: Print Batch Statistics
-			predlab = torch.argmax(output, 1, keepdim=False)
+			predlab = torch.argmax(output, 1, keepdim=False).squeeze()
 			meanoutput = output.logsumexp(dim=0,keepdim=True)
 			meanoutput = meanoutput - meanoutput.logsumexp(dim=1,keepdim=True)
 			jsd= (output.exp()*output).sum(dim=1).mean() - (meanoutput.exp()*meanoutput).sum()
@@ -286,22 +252,28 @@ class Epocher(object):
 			totalsamples += labels.size(0)
 			train_acc = corrects/totalsamples
 			train_loss = (run_loss/(batch_n+1))
+			trytotal += trys
+			tryavg = trytotal/(batch_n+1)
 			train_avg_prob_correct = run_lprob_correct/(batch_n+1)
-			print(' '+ prefixprint +':' 
+			jsdtotal = (jsd + jsdtotal)/2 if batch_n !=0 else jsd
+			self.print(' '+ prefixprint +':' 
 				  'batch: %d '%(batch_n) +
 				  ' train_loss: %.4f'% train_loss +
 				  ' train_lprob: %.2f' % train_avg_prob_correct +
-				  ' trials: %.2f' % trys+
-					'jsd: %.3f' % jsd +
-			      ' train accuracy: %.2f'% (train_acc*100),end="\r"
+				  ' trials: %.2f' % tryavg+
+					'jsd: %.3f' % jsdtotal +
+			      ' train accuracy: %.2f'% (train_acc*100),path, end="\r"
 
 			      )
 		scalar_dict = self.model.get_scalar_dict()
-		print(' '+ prefixprint + ':'
+		self.print(' '+ prefixprint + ':'
 		                    'batch: %d ' % (batch_n) +
 		      ' train_loss: %.4f' % train_loss +
 		      ' train_lprob: %.2f' % train_avg_prob_correct +
-		      ' train accuracy: %.2f' % (train_acc * 100), end=" "
+		      ' train accuracy: %.2f' % (train_acc * 100)+
+		           ' trials: %.2f' % tryavg +
+		           'jsd: %.3f' % jsdtotal
+		           ,path, end=" "
 		      )
 
 		# TODO: Evaluate Test
@@ -318,7 +290,7 @@ class Epocher(object):
 				if self.opts.netopts.customdict['exact']:
 					trials =1
 				else:
-					trials = 50
+					trials = 1
 				for i in range(trials):
 					output_temp,logprob,model_prob = self.model(inputs)
 					output = output + output_temp.exp()
@@ -326,7 +298,7 @@ class Epocher(object):
 
 				output = output.view(-1, self.opts.dataopts.classnum)
 				#TODO: Print Batch Statistics
-				predlab = torch.argmax(output, 1, keepdim=False)
+				predlab = torch.argmax(output, 1, keepdim=False).squeeze()
 				accthis = (predlab == labels).sum().item()
 				val_corrects += accthis
 				totalsamples += labels.size(0)
@@ -335,10 +307,15 @@ class Epocher(object):
 				val_run_loss += loss.item()
 				val_avg_loss = val_run_loss/(batch_n+1)
 
-		print(' '+ prefixprint + ':' +
+		self.print(' '+ prefixprint + ':' +
 		      ' val_loss: %.4f' % val_avg_loss +
-		      ' val_acc: %.2f' % (val_acc * 100))
-		resdict = dict(test_acc=val_acc*100, train_acc=train_acc*100, test_loss=val_avg_loss, train_loss=train_loss)
+		      ' val_acc: %.2f' % (val_acc * 100),path)
+		resdict = dict(test_acc=val_acc*100,
+		               train_acc=train_acc*100,
+		               test_loss=val_avg_loss,
+		               train_loss=train_loss,
+		               train_jsd=jsdtotal,
+		               train_avg_try=tryavg)
 		resdict.update(scalar_dict)
 		return resdict,outputfull
 
@@ -347,7 +324,7 @@ class Epocher(object):
 		self.results = ResultStruct(path)
 		for epoch in range(self.opts.epocheropts.epochnum):
 			prefixtext = 'Epoch %d' % epoch
-			epochres,outputsample = self.run_epoch(prefixtext,epoch)
+			epochres,outputsample = self.run_epoch(prefixtext,epoch,path)
 
 			self.results.add_epoch_res_dict(epochres,epoch,save_result)
 			self.opts.optimizeropts.lr_sched.step()
@@ -358,5 +335,10 @@ class Epocher(object):
 
 		self.model.to(torch.device('cpu'))
 		return self.results
+	def print(self,string,path,end='\n'):
+		log_file = open(os.path.join(path,'log.txt'),"a")
+		print(string,end=end)
+		log_file.write(string+end)
+		log_file.close()
 
 

@@ -170,7 +170,6 @@ class SphereParameter(Parameterizer):
 	def get_log_prior(self,k):
 		return -(k**2).sum()
 	def get_log_norm(self,k:Tensor)->Tensor:
-		#lognorm = self.normfunc(2*((k.abs().clamp(epsilon,None)).log()),self.normaxis,1)
 		prob = k**2 + definition.epsilon
 		lognorm = prob.sum(dim=self.normaxis,keepdim=True).log()
 

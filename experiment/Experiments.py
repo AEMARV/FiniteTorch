@@ -7,7 +7,7 @@ from models.klmodels import *
 import layers.klmodules as M
 from data.datasetutils import *
 
-class Quickie(Experiment_):
+class MAP(Experiment_):
 	''' Experimenting stochastic gradients in all layers:
 
 		Model category 1: KL ReLU models with stochastic LNORM
@@ -16,7 +16,7 @@ class Quickie(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=1000,
+		                         epochnum=300,
 		                         batchsz=128,
 		                         shuffledata=True,
 		                         numworkers=1,
@@ -65,7 +65,7 @@ class Quickie(Experiment_):
 		'''Data OPTs'''
 		'''LR SCHED'''
 		data_transforms =[ BintoLogFSD]
-		lr_sched = constant_lr(init_lr=0.01,step=30, exp_decay_perstep=1)
+		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=1)
 
 		''' Net Options'''
 		netdict = dict(exact=False)
@@ -140,19 +140,21 @@ class Quickie(Experiment_):
 		isrelu = booltostr(isrelu)
 		isnormstoch = booltostr(isnormstoch)
 		nl = 'lnorm|s:{},reg:0'.format(isnormstoch)
-		convparam = 'param:log,stoch:0,isrelu:{},coef:0.01,sampopt:2'.format(isrelu)
-		convparamsigm = 'param:logdirich,stoch:0,isrelu:{},coef:1'.format('0')
+		convparam = 'param:logunif,stoch:0,isrelu:{},coef:0.1,sampopt:2'.format(isrelu)
+		convparamsigm = 'param:logunif,stoch:0,isrelu:{},coef:1'.format('0')
 		d = '->'
 		finish = 'fin'
-		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d #  + nl + d
+		model_string += 'map|r:3,f:2,icnum:16,pad:same,bias:0,stride:1,{}'.format(convparam) + d # + nl + d
 		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
+		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
 		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:2,icnum:128,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
+		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
 		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
+		#model_string += 'map|r:3,f:4,icnum:32,pad:same,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
+		#model_string += 'map|r:3,f:8,icnum:16,pad:same,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
+		model_string += 'map|r:3,f:2,icnum:16,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
 		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:10,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
+		model_string += 'map|r:3,f:10,icnum:1,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
 		#model_string += 'klavgpool|r:5,f:128,pad:same,stride:2,bias:1' + d
 		#model_string += 'map|r:3,f:128,pad:valid,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
 		#model_string += 'map|r:5,f:10,pad:valid,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
@@ -165,13 +167,13 @@ class Quickie(Experiment_):
 
 		'''Data OPTs'''
 		'''LR SCHED'''
-		data_transforms = [BintoLogFSD]
-		lr_sched = constant_lr(init_lr=1, step=30, exp_decay_perstep=1)
+		data_transforms = [BintoLogFSDFact]
+		lr_sched = constant_lr(init_lr=.1, step=30, exp_decay_perstep=1)
 
 		''' Net Options'''
-		netdict = dict(exact=False)
+		netdict = dict(exact=False,divgreg=False,divgregcoef=1)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=8,
+		                   input_channelsize=2,
 		                   inputspatszvalidator=lambda x: x == 32,
 		                   data_transforms=data_transforms,
 		                   classicNet=False,
@@ -394,8 +396,8 @@ class Synthetic_PMaps(Experiment_):
 		d = '->'
 		finish = 'fin'
 		#model_string += '{}|r:1,f:1000,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
-		model_string += '{}|r:1,f:10,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
-		model_string += '{}|r:1,f:10,icnum:4,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
+		model_string += '{}|r:1,f:1000,icnum:1,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
+		model_string += '{}|r:1,f:1000,icnum:1,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
 		model_string += ('{}|r:1,f:' + str(data_opts.classnum) + ',icnum:1,pad:valid,bias:1,stride:1,islast:1,{}').format(
 			layerstr,convparam)  + d# + nl + d
 		#model_string += 'glklavgpool|r:4,f:32,pad:valid,stride:2,bias:1' + d# + nl + d
@@ -713,7 +715,7 @@ class FiniteDropout(Experiment_):
 		return opts_net, opts_optim
 
 
-class QuickCifar(Experiment_):
+class ICML19(Experiment_):
 	'''Experimenting Sigmoid vs ReLU in CNNs and FCNNs
 	'''
 
@@ -1413,6 +1415,8 @@ class QuickCifar(Experiment_):
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
+
+
 class NIN(Experiment_):
 	'''Experimenting Sigmoid vs ReLU in CNNs and FCNNs
 	'''

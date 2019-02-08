@@ -25,6 +25,7 @@ class StaticNet(MyModule):
 				biasinit(layer.bias.data)
 
 			self.add_module('block'+str(bloacknum),layer)
+
 	def generate(self,y):
 
 		for l in reversed(self.layerlist):
@@ -59,7 +60,7 @@ class StaticNet(MyModule):
 				x,logprob_temp,model_prob_tmp = layer(x)
 			if hasnan(x):
 				raise Exception(str(layer) + 'has nan')
-			logprob +=logprob_temp
+			logprob += logprob_temp
 			model_prob += model_prob_tmp
 		return x,logprob, model_prob
 

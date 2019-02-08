@@ -20,7 +20,7 @@ def boolprompt(question):
 if __name__ == '__main__':
 	#exp = Quickie(1)
 	#exp = Synthetic_PMaps(1)
-	exp = QuickCifar(1)
+	exp = MAP(1)
 	exp.run()
 	# experiment_name = 'Baselines'
 	# model_names = ['quick_cifar']

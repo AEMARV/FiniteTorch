@@ -45,6 +45,10 @@ class Experiment_(object):
 		if self.save_results:
 			self.summary_dir,exist = self.force_create_path(['.', 'Experiment Results', self.name])
 			self.result_dir,exist = self.force_create_path(['.', 'Results', self.name])
+		else:
+			self.summary_dir, exist = self.force_create_path(['.', 'Experiment Results', "Temp"])
+			self.result_dir, exist = self.force_create_path(['.', 'Results', "Temp"])
+			self.override=True
 
 	def get_model_opts(self, model_name: str, dataopts: DataOpts) ->Tuple[NetOpts,OptimOpts] :
 		netopts, optimopts = globals()[model_name](dataopts)

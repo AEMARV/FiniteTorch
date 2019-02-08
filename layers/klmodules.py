@@ -275,11 +275,14 @@ class BayesFunc(KLConv_Base):
 	def build(self):
 		self.paraminit.coef = self.coefinit
 		self.kernel = Parameter(data=self.paraminit(self.kernel_shape))
+		self.mixkernel = Parameter(data=self.paraminit((self.fnum*self.icnum,self.fnum*self.icnum,1,1)))
+		self.requires_grad =True
+		self.register_parameter('mixkernel', self.mixkernel)
 		# self.kernel = Parameter(data=torch.normal(torch.zeros(self.kernel_shape),self.coefinit))
 		self.kernel.requires_grad = True
 		self.register_parameter('kernel', self.kernel)
 		self.paraminit.coef = 0
-		self.bias = Parameter(data=self.paraminit((1, self.kernel_shape[0], 1, 1,self.icnum), isbias=True))
+		self.bias = Parameter(data=self.paraminit((1, self.fnum, 1, 1,self.icnum), isbias=True))
 		self.bias.requires_grad = self.isbiased
 		self.register_parameter('bias', self.bias)
 
@@ -362,13 +365,6 @@ class BayesFunc(KLConv_Base):
 			print("Oh no")
 		return checks
 
-	#def get_log_kernel(self):
-	#	norm = (self.kernel.abs()).mean()
-	# print(norm.item())
-	#	return self.kernel
-	# def get_log_bias(self):
-	#	return self.bias
-
 	def calcent(self, y: Tensor):
 		ent = -y.clamp(-10000, None) * y.exp()
 		ent = ent.sum(dim=1, keepdim=True)
@@ -386,7 +382,6 @@ class BayesFunc(KLConv_Base):
 		ent = ent.sum(dim=1, keepdim=True)
 		ent = ent.mean()
 
-
 	def get_log_kernel(self,index=0):
 		k = self.kernel
 		sp1 = k.shape[2]
@@ -394,35 +389,39 @@ class BayesFunc(KLConv_Base):
 		k = k.reshape((self.fnum*self.icnum,self.chansz,self.inp_icnum,k.shape[2],k.shape[3]))
 		k = self.paraminit.get_log_kernel(k)
 		return k
+
 	def get_log_kernel_conv(self,):
 		k = self.get_log_kernel()
-		k = k.permute((0, 2, 1, 3, 4))
 		k = k.reshape((self.fnum * self.icnum, self.inp_icnum * self.chansz, self.kernel.shape[2], self.kernel.shape[3]))
 		return k
 
-#def sample_log_likelihood(self, x):
-#	pass
 	def get_kernel_expanded_format(self,k):
 		sp1 = k.shape[2]
 		sp2 = k.shape[3]
 		k = k.reshape((self.fnum * self.icnum, self.chansz, self.inp_icnum, k.shape[2], k.shape[3]))
 		return k
+
 	def reshape_input_for_conv(self,x:Tensor):
+		idp_dim=4
+		chand_dim=1
 		if x.ndimension()<5:
 			return x
 
-		x=(x.permute(0,1,4,2,3))
+		x=(x.permute(0,chand_dim,idp_dim,2,3))
 		x = x.reshape((x.shape[0],x.shape[1]*x.shape[2],x.shape[3],x.shape[4]))
 		return x
+
 	def reshape_input_for_nxt_layer(self,ly):
 		ly = ly.view((ly.shape[0],self.fnum,self.icnum,ly.shape[2],ly.shape[3]))
 		ly = ly.permute(0,1,3,4,2)
 		return ly
+
 	def get_reg_vals(self):
 		k = self.get_kernel_expanded_format(self.kernel)
 		k = self.paraminit.get_log_kernel(k)
 		regs = (k).min(dim=1,keepdim=True)[0]
 		return 0#self.regularizer
+
 	def marvasti_divg(self):
 		uniflogprob= float(-math.log(self.kernel.shape[1]))
 
@@ -430,13 +429,9 @@ class BayesFunc(KLConv_Base):
 		maxprob= (uniflogprob-k).min(dim=1,keepdim=True)[0]
 		maxprob =maxprob.sum(dim=(2,3,4),keepdim=True)
 		return maxprob
-	def get_log_bias(self,index=0):
-		k = self.paraminit.get_log_kernel(self.kernel)
-		b = (-k).min(dim=1,keepdim=True)[0]
-		b = b.sum(dim=(1,2,3),keepdim=True).permute((1,0,2,3))
-		b = self.reshape_input_for_nxt_layer(b)
-		b = b - b.logsumexp(dim=1,keepdim=True)
-		return b
+
+
+
 	def get_model_lprob(self):
 		b = self.get_log_bias()
 		k = self.get_log_kernel()
@@ -450,12 +445,19 @@ class BayesFunc(KLConv_Base):
 		kernel_divg = kernel_divg.min(dim=1,keepdim=True)[0].sum()
 
 		return bias_divg+kernel_divg
-
-
+	def get_sampled_mix_kernel(self):
+		mix_kernel = self.paraminit.get_log_kernel(self.mixkernel)
+		mix_sampled , logprob =sample(mix_kernel,1,1)
+		logprob = logprob.sum()
+		return mix_sampled,logprob
 	def forward(self,lx,MAP=False):
-		avglogprob = lx.mean(dim=1,keepdim=True)
 		if not MAP:
+			logprobunif = -math.log(lx.shape[1])*lx.shape[2]*lx.shape[3]*lx.shape[4]
 			xsamp,logprob = sample(lx,1,1)
+			#logprob = logprob.sum(dim=(1,2,3,4),keepdim=True).squeeze()
+			unif = lx*0
+			unif = unif - unif.logsumexp(dim=1,keepdim=True)
+			modelprob= -(-((unif-lx).min(dim=1,keepdim=True)[0])).relu().sum(dim=(1,2,3,4),keepdim=True)
 		else:
 			xsamp, logprob = sample_map(lx, 1, 1)
 		xsamp = self.reshape_input_for_conv(xsamp)
@@ -464,40 +466,16 @@ class BayesFunc(KLConv_Base):
 		else:
 			logprob = logprob.sum(dim=(1, 2, 3,4), keepdim=True)
 		ly = F.conv2d(xsamp,self.get_log_kernel_conv(),stride=self.stride,padding=self.padding[0])
+		mixkernel, logprob_mix = self.get_sampled_mix_kernel()
+		logprob += logprob_mix.sum()
+		ly  = F.conv2d(ly,mixkernel,stride=1,padding=0)
+
+
 		ly = self.reshape_input_for_nxt_layer(ly)
-		##ly     +=  self.get_log_bias()# type:Tensor
+		ly     +=  self.get_log_bias()# type:Tensor
 		lnorm = ly.logsumexp(dim=1,keepdim=True)
 		ly = ly - lnorm
-
-		return ly,logprob.squeeze(), self.get_model_lprob()
-
-	def forward2(self, x: torch.Tensor):
-		# self.testGrad(x)
-		log_prob = 0
-		if self.exact:
-			return self.forward_exact(x),0
-		#self.useless_counter += 1
-		if self.training:
-			y = ConvBayesMap.apply(x, self.get_log_kernel(), self.get_log_bias(), 1, self.padding[0], self.stride,
-			                       self.samplingtype)
-		# self.regularizer = self.sample_log_prob()
-		else:
-			y = ConvBayesMap.apply(x, self.get_log_kernel(), self.get_log_bias(), 1, self.padding[0], self.stride,
-			                       self.samplingtype)
-		if self.write_images:
-			self.print_filts()
-			self.print_output(y)
-
-		return y,0
-
-	def forward_exact(self, x):
-		bias = self.get_log_bias()
-		kernel = self.get_log_kernel()
-		bias = bias.view([kernel.shape[0], 1, 1, 1])
-		kernel = kernel + bias
-		kernel = kernel - LogSumExp.apply(kernel, 0, 1)
-		y = F.conv2d(x.exp(), kernel.exp(), padding=self.padding).log()
-		return y,0
+		return ly,logprob.squeeze() , modelprob #TODO : plus lnorm added plz remove
 
 class BayesFuncDense(BayesFunc):
 	def __init__(self,*args,**kwargs):
@@ -556,7 +534,6 @@ class BayesFuncDense(BayesFunc):
 		ly = lysamp.log()
 		logprob += logprob_temp.sum(dim=(1, 2, 3), keepdim=True)
 		return ly, logprob
-
 
 
 class KLConv(KLConv_Base):
@@ -705,7 +682,7 @@ class KLConv(KLConv_Base):
 			y = y+  self.get_log_bias()
 
 		#y = y + self.get_log_bias()
-		return y,0,self.paraminit.get_log_prior(self.kernel)*0
+		return y,0,0
 
 
 class MDConv(KLConv_Base):
