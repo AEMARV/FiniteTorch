@@ -14,7 +14,7 @@ class constant_lr(object):
 		self.init_lr= init_lr
 	def __call__(self, epoch):
 
-		return self.init_lr
+		return 1
 
 class discrete_exp_decay_lr(object):
 	''' every $step epochs the lr decreases in the exponent by $exp_decay_perstep'''

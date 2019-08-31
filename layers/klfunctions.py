@@ -138,18 +138,21 @@ class LogSumExpStoch(Function):
 	@staticmethod
 	def forward(ctx, input:torch.Tensor,axis,totalcount):
 		input = input.detach()
-		maxval = input.max(dim=axis,keepdim=True)[0]
-		logsumexp = (input - maxval).exp().sum(dim=axis,keepdim=True).log() + maxval
-		ctx.save_for_backward(input,logsumexp,Variable(input.new_tensor(axis,dtype=torch.int32)),Variable(input.new_tensor(totalcount,dtype=torch.int32)))
+		logsumexp = input.logsumexp(dim=axis,keepdim=True)
+		ctx.save_for_backward((input-logsumexp).detach(),Variable(input.new_tensor(axis,dtype=torch.int32)),Variable(input.new_tensor(totalcount,dtype=torch.int32)))
 		return logsumexp
 	@staticmethod
 	def backward(ctx, grad_output:List[torch.Tensor]):
 		grad_output = grad_output.detach()
-		input,lognorm,axis,totalcount = ctx.saved_tensors
-		samps = sample(input-lognorm,axis,1)[0]
+		input,axis,totalcount = ctx.saved_tensors
+
 		#prob = (input - lognorm).exp()
 		#samps = LogSumExpStoch.sample(prob,axis.item())
-		grad_input = grad_output * samps
+		if totalcount==1:
+			samps = sample_manual(input, axis)[0]
+			grad_input = grad_output * samps
+		else:
+			grad_input = input.exp()*grad_output
 		return grad_input,None,None
 
 	@staticmethod
@@ -171,7 +174,7 @@ class LogSumExpStoch(Function):
 			raise(Exception('Only axis=1 and axis=4(for binary distributions) is acceptable '+ 'axis=%d'%axis+ ' was given'))
 		samps = samps.type_as(p)
 		return samps
-class Sampler(Function):
+class Sampler_f(Function):
 	''' Takes log sum exp along axis 1'''
 	@staticmethod
 	def forward(ctx, input:torch.Tensor,axis):

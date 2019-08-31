@@ -6,6 +6,8 @@ import torchvision as tv
 import test_finite.dataset_utils
 from test_finite.dataset_utils import Joint
 '''Model Imports'''
+def print_section(symbol='*',printer=print):
+	printer(symbol*100)
 class allOpts(object):
 	def __init__(self,
 	             name,
@@ -23,7 +25,11 @@ class allOpts(object):
 	def validateopts(self):
 		if not self.netopts.inputspatszvalidator(self.dataopts.inputspatsz):
 			raise Exception('Input spatial size is not compatible with the model')
-
+	def print(self, printer=print):
+		printer('\n\n')
+		print_section('*=*=',printer=printer)
+		self.netopts.print(printer= printer)
+		self.optimizeropts.print(printer=printer)
 
 
 
@@ -34,11 +40,13 @@ class EpocherOpts(object):
 	             save_results,
 	             epochnum=150,
 	             batchsz=100,
+	             batchsz_val=128,
 	             shuffledata=True,
 	             numworkers=1,
 	             gpu=True):
 		self.epochnum = epochnum
 		self.batchsz = batchsz
+		self.batchsz_val= batchsz_val
 		self.shuffledata = shuffledata
 		self.numworkers = numworkers
 		self.gpu = gpu
@@ -71,6 +79,16 @@ class NetOpts(object):
 		self.weightinit=weightinit
 		self.biasinit = biasinit
 		self.data_transforms = data_transforms
+	def print(self,printer=print):
+		print_section('-')
+		printer("Model String:")
+		printer(self.modelstring)
+		print_section('-')
+		printer("Custom Dictionary")
+		for key in self.customdict.keys():
+			printer(key, end=': ')
+			printer(self.customdict[key],end=' | ')
+			printer('\n')
 
 
 class OptimOpts(object):
@@ -92,6 +110,17 @@ class OptimOpts(object):
 		self.dampening = dampening
 		self.nestrov = nestrov
 		self.loss=loss
+	def print(self,printer=print):
+		printer("Optimization Options:")
+		printer("Learning Rate: ", end='')
+		printer(self.lr, end=' ')
+		printer("|")
+		printer("momentum: ",end='' )
+		printer(self.momentum, end=' ')
+		printer("|")
+		printer("weight decay: ", end='')
+		printer(self.weight_decay,end=' ')
+		printer("|")
 
 class DataOpts(object):
 	def __init__(self,name,inputdim=0,outputdim=0,samplenum=0
@@ -138,13 +167,14 @@ class DataOpts(object):
 		self.trainset = self.joint.create_dataset(self.samplenum[0])
 		self.testset = self.joint.create_dataset(self.samplenum[1])
 		batchsz = opts.epocheropts.batchsz
+		batchszval = opts.epocheropts.batchsz_val
 		isshuffle = opts.epocheropts.shuffledata
 		transform = transforms.Compose(
 			[transforms.ToTensor()] + opts.netopts.data_transforms)
 		# Construct loaders
 		train_loader = torch.utils.data.DataLoader(self.trainset, batch_size=batchsz, shuffle=isshuffle, sampler=None,
 		                                           num_workers=1)
-		test_loader = torch.utils.data.DataLoader(self.testset, batch_size=batchsz, shuffle=isshuffle, sampler=None,
+		test_loader = torch.utils.data.DataLoader(self.testset, batch_size=batchszval, shuffle=isshuffle, sampler=None,
 		                                          num_workers=1)
 		return train_loader, test_loader
 	def get_cifar10(self,opts: allOpts):

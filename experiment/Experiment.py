@@ -16,16 +16,6 @@ def mkdirs(paths_list):
 			dir_exists=False
 	return dir_exists
 
-def boolprompt(question):
-	answer=''
-	while(answer.lower!='n' or answer.lower()!='y'):
-		answer = input(question+' [y]/[n]')
-		if answer[0].lower()=='y':
-			return True
-		elif answer[0].lower()=='n':
-			return False
-		else:
-			print('please answer with y/n characters')
 
 class Experiment_(object):
 	def __init__(self,trial,save_results=None):
@@ -77,10 +67,10 @@ class Experiment_(object):
 		for result in result_list:
 			dictlist.append( result.resultdict)
 		df = pd.DataFrame(dictlist)
-		array = np.array(df.values.tolist())
+		array = np.array(df.values.tolist(),dtype=np.float64) #type: np.ndarray
 		mean_trajectory = array.mean(axis=0)
 		lastepochmean = mean_trajectory[0:,-1:]
-		std_trajectory = array.std(axis=0)
+		std_trajectory = np.std(array,axis=0)
 		lastepochstd = std_trajectory[0:,-1:]
 		# columns are epochs, This part is empirically test, avoid inferring things
 		mean_traj_dict = pd.DataFrame(mean_trajectory.transpose(),columns=df.columns).to_dict('list')
@@ -123,13 +113,14 @@ class Experiment_(object):
 	def validate(self):
 		raise NotImplementedError()
 	def run(self):
-		self.opt_list =  self.collect_opts()
+		self.opt_list = self.collect_opts()
 		result_dir=[]
 		meanpath=[]
 		stdpath=[]
 		# self.validate()
-		for opt in self.opt_list:#type: allOpts
+		for opt in self.opt_list: # type: allOpts
 			ep = Epocher(opt)
+			opt.print()
 			result_list =[]
 			last_mean_dict_list= []
 			last_std_dict_list = []

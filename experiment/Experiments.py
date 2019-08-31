@@ -16,19 +16,19 @@ class MAP(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=300,
-		                         batchsz=128,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=500,
+								 batchsz=128,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['cifar10', 'cifar100']
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
-			for model in [self.Hello_Map_onelayerv2]:
-				for isrelu in [True]:
-					model_opt, optim_opt = model(dataopt,isrelu=isrelu)
+			for model in [self.Hello_Map_variables]:
+				for reg_coef in [1/50000]:#[x/10 for x in range(11)]:
+					model_opt, optim_opt = model(dataopt, reg_coef=reg_coef,lr=0.01,init_coef=0.01)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 
 		return opt_list
@@ -70,97 +70,67 @@ class MAP(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=8,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=8,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss= NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.0,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss= NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
-	def Hello_Map_onelayer(self,data_opts: DataOpts, isrelu=True, isnormstoch=False) -> Tuple[NetOpts, OptimOpts]:
+
+	def Hello_Map_variables(self,data_opts: DataOpts,
+							reg_coef=0,
+							init_coef=0.0001,
+							lr=1
+							) -> Tuple[NetOpts, OptimOpts]:
+
+
 		model_string = ''
-		isrelu = booltostr(isrelu)
-		isnormstoch = booltostr(isnormstoch)
-		nl = 'lnorm|s:{},reg:0'.format(isnormstoch)
-		convparam = 'param:logdirich,stoch:0,isrelu:{},coef:1,sampopt:2'.format(isrelu)
-		convparamsigm = 'param:logdirich,stoch:0,isrelu:{},coef:1'.format('0')
 		d = '->'
 		finish = 'fin'
-		model_string += 'map|r:15,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'map|r:1,f:10,pad:valid,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'klavgpool|r:32,f:128,pad:valid,stride:1,bias:1' + d
+		samp = 'sample' + d
+		convparam = 'param:log,coef:{}'.format(str(init_coef))
+		convparamend = 'param:log,coef:{}'.format(str(init_coef))
 
 
-		model_string += finish
 
-		'''Data OPTs'''
-		'''LR SCHED'''
-		data_transforms = [BintoLogFSD]
-		lr_sched = constant_lr(init_lr=1, step=30, exp_decay_perstep=1)
+		# model_string += samp
+		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d
+		model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
-		''' Net Options'''
-		netdict = dict(exact=False)
-		opts_net = NetOpts(model_string,
-		                   input_channelsize=8,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
-		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
-		'''Optimizer Options'''
+		model_string += samp
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:0,stride:1,{}'.format(convparam) + d
+		model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
-		return opts_net, opts_optim
-	def Hello_Map_onelayerv2(self,data_opts: DataOpts, isrelu=True, isnormstoch=False) -> Tuple[NetOpts, OptimOpts]:
-		''' 20 percent acc'''
-		model_string = ''
-		isrelu = booltostr(isrelu)
-		isnormstoch = booltostr(isnormstoch)
-		nl = 'lnorm|s:{},reg:0'.format(isnormstoch)
-		convparam = 'param:logunif,stoch:0,isrelu:{},coef:0.1,sampopt:2'.format(isrelu)
-		convparamsigm = 'param:logunif,stoch:0,isrelu:{},coef:1'.format('0')
-		d = '->'
-		finish = 'fin'
-		model_string += 'map|r:3,f:2,icnum:16,pad:same,bias:0,stride:1,{}'.format(convparam) + d # + nl + d
-		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		#model_string += 'map|r:3,f:4,icnum:32,pad:same,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		#model_string += 'map|r:3,f:8,icnum:16,pad:same,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'map|r:3,f:2,icnum:16,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'klavgpool|r:3,pad:same,stride:2,bias:1' + d
-		model_string += 'map|r:3,f:10,icnum:1,pad:same,bias:0,stride:1,{}'.format(convparam) + d  # + nl + d
-		#model_string += 'klavgpool|r:5,f:128,pad:same,stride:2,bias:1' + d
-		#model_string += 'map|r:3,f:128,pad:valid,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		#model_string += 'map|r:5,f:10,pad:valid,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		model_string += 'glklavgpool|r:32,f:128,pad:valid,stride:1,bias:1' + d
-		#model_string += 'map|r:3,f:10,pad:same,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
-		#model_string += 'map|r:1,f:10,pad:valid,bias:1,stride:1,{}'.format(convparam) + d  # + nl + d
+		model_string += samp
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:0,stride:1,{}'.format(convparam) + d
+		model_string += 'klavgpool|r:3,pad:same,stride:2' + d
+
+		model_string += samp
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:0,stride:1,{}'.format(convparam) + d
+		model_string += 'klavgpool|r:3,pad:same,stride:2' + d
+
+		model_string += samp
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:0,stride:1,{}'.format(convparamend) + d
+		model_string += 'klavgpool|r:3,pad:same,stride:2' + d
+
+		model_string += samp
+		model_string += 'map|r:1,f:10,icnum:1,pad:same,bias:0,stride:1,{}'.format(convparam) + d
+		# model_string += 'glklavgpool|r:32,pad:valid,stride:1' + d
+
 
 
 		model_string += finish
@@ -168,28 +138,32 @@ class MAP(Experiment_):
 		'''Data OPTs'''
 		'''LR SCHED'''
 		data_transforms = [BintoLogFSDFact]
-		lr_sched = constant_lr(init_lr=.1, step=30, exp_decay_perstep=1)
+		lr_sched = discrete_exp_decay_lr(init_lr=1, step=2, exp_decay_perstep=0)
 
 		''' Net Options'''
-		netdict = dict(exact=False,divgreg=False,divgregcoef=1)
+		divgreg= True
+		if (reg_coef!=0)!=divgreg: Warning("Check regularizer options")
+		netdict = dict(exact=False, divgreg=divgreg, reg_coef=reg_coef, reg_mode='mdivg')
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
-		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+						   input_channelsize=dict([('chansz',2),("icnum",3)]),
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
+
+		opts_optim = OptimOpts(lr=lr,
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
+
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -223,23 +197,23 @@ class MAP(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=8,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=8,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -286,22 +260,22 @@ class MAP(Experiment_):
 		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=1)
 		''' Net Options'''
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -337,22 +311,22 @@ class MAP(Experiment_):
 		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=1)
 		''' Net Options'''
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.5,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.5,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -364,70 +338,76 @@ class Synthetic_PMaps(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=300,
-		                         batchsz=100,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=100,
+								 batchsz=100,
+		                         batchsz_val=128,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['synthetic']
 		for dataset in datasets:
-			inputsz = 1000
-			outputsz = 10
+			inputsz =20
+			outputsz =5# inputsz
 			numsample = [1000,1000]
 			dataopt = DataOpts(dataset,inputsz,outputsz,numsample)
 			for model in [self.Map]:
 				for isrelu in [True]:
 					model_opt, optim_opt = model(dataopt,inputsz,outputsz,isrelu=isrelu)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 
 		return opt_list
 
-	def Map(self,data_opts: DataOpts,inputsz,outputsz, isrelu=True, isnormstoch=False) -> Tuple[NetOpts, OptimOpts]:
+	def Map(self,data_opts: DataOpts,inputsz,outputsz, isrelu=True, isnormstoch=False,reg_coef=1/20) -> Tuple[NetOpts, OptimOpts]:
 		exact = False
 		layerstr = 'map'
-
+		d = '->'
+		finish = 'fin'
 		model_string = ''
 		isrelu = booltostr(isrelu)
 		isnormstoch = booltostr(isnormstoch)
 		nl = 'lnorm|s:{},reg:0'.format(isnormstoch)
-		convparam = 'param:logunif,stoch:0,isrelu:{},coef:1,sampopt:2,exact:1'.format(isrelu)
-		d = '->'
-		finish = 'fin'
+		samp = 'sample' + d
+		convparam = 'param:log,stoch:0,isrelu:{},coef:0,sampopt:2,exact:0'.format(isrelu)
+		convparamend = 'param:log,stoch:0,isrelu:{},coef:0.0001,sampopt:2,exact:0'.format(isrelu)
 		#model_string += '{}|r:1,f:1000,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
-		model_string += '{}|r:1,f:1000,icnum:1,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
-		model_string += '{}|r:1,f:1000,icnum:1,pad:same,bias:1,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
-		model_string += ('{}|r:1,f:' + str(data_opts.classnum) + ',icnum:1,pad:valid,bias:1,stride:1,islast:1,{}').format(
+		#model_string += samp
+		model_string += '{}|r:1,f:10,icnum:1,pad:same,bias:0,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
+		model_string += samp
+		model_string += '{}|r:1,f:10,icnum:1,pad:same,bias:0,stride:1,{}'.format(layerstr,convparam) + d  # + nl + d
+		model_string += samp
+		model_string += ('{}|r:1,f:' + str(data_opts.classnum) + ',icnum:1,pad:valid,bias:0,stride:1,islast:1,{}').format(
 			layerstr,convparam)  + d# + nl + d
+		# model_string += samp
 		#model_string += 'glklavgpool|r:4,f:32,pad:valid,stride:2,bias:1' + d# + nl + d
 
 		model_string += finish
 
-		netdict = dict(exact=exact)
+		netdict = dict(exact=exact, divgreg=reg_coef !=0, reg_coef=reg_coef, reg_mode='mdivg')
 		'''Data OPTs'''
 		'''LR SCHED'''
 		data_transforms =[]
-		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=1)
+		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=0)
 		''' Net Options'''
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=inputsz,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
-		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss= NLLLoss(reduce=False)
-		                       )
+						   input_channelsize=dict([('chansz',inputsz),("icnum",1)]),
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
+		opts_optim = OptimOpts(lr=3,
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.0,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss= NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -474,22 +454,22 @@ class Synthetic_PMaps(Experiment_):
 		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=1)
 		''' Net Options'''
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -526,22 +506,22 @@ class Synthetic_PMaps(Experiment_):
 		lr_sched = constant_lr(init_lr=1,step=30, exp_decay_perstep=1)
 		''' Net Options'''
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.5,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.5,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -551,11 +531,11 @@ class BaseLines(Experiment_):
 	def collect_opts(self):
 		opt_list=[]
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=100,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=100,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['cifar10','cifar100']
 		models = ['quick_cifar','nin_caffe','vgg']
 		for dataset in datasets:
@@ -577,11 +557,11 @@ class Stochastic(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=100,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=100,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['cifar100']
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
@@ -589,7 +569,7 @@ class Stochastic(Experiment_):
 				for isrelu in [False,False]:
 					model_opt, optim_opt = model(dataopt,isrelu=isrelu)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 		return opt_list
 
@@ -600,11 +580,11 @@ class Sigmoid(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=100,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=100,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['cifar10', 'cifar100']
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
@@ -612,7 +592,7 @@ class Sigmoid(Experiment_):
 				for isrelu in [False]:
 					model_opt, optim_opt = model(dataopt,isrelu=isrelu)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 		return opt_list
 
@@ -625,11 +605,11 @@ class FiniteReLUStochGrad(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=100,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=100,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['cifar10', 'cifar100']
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
@@ -637,7 +617,7 @@ class FiniteReLUStochGrad(Experiment_):
 				for isrelu in [True]:
 					model_opt, optim_opt = model(dataopt,isrelu=isrelu,isnormstoch=True)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 		return opt_list
 
@@ -647,11 +627,11 @@ class FiniteDropout(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=100,
-		                         shuffledata=True,
-		                         numworkers=1,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=100,
+								 shuffledata=True,
+								 numworkers=1,
+								 gpu=True)
 		datasets = ['cifar10', 'cifar100']
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
@@ -659,7 +639,7 @@ class FiniteDropout(Experiment_):
 				for isrelu in [True]:
 					model_opt, optim_opt = model(dataopt,isrelu=isrelu,isnormstoch=True)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 		return opt_list
 	def finite_nin_dropout(self,data_opts):
@@ -695,21 +675,21 @@ class FiniteDropout(Experiment_):
 		lr_sched = discrete_exp_decay_lr(init_lr=1, step=30, exp_decay_perstep=1)
 		''' Net Options'''
 		opts_net = NetOpts(model_string,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   )
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -722,11 +702,11 @@ class ICML19(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=128,
-		                         shuffledata=True,
-		                         numworkers=2,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=128,
+								 shuffledata=True,
+								 numworkers=2,
+								 gpu=True)
 		datasets = [ 'cifar100','cifar10']
 		for model in [self.finite_vgg_double,self.vgg_real_noBN_noDO]:
 			for dataset in datasets:
@@ -735,8 +715,8 @@ class ICML19(Experiment_):
 				comps = 0
 				model_opt, optim_opt = model(dataopt, comps + 1)
 				opt = allOpts(model.__name__ + 'indpt_compt: ' + str(comps), netopts=model_opt,
-				              optimizeropts=optim_opt, epocheropts=epocheropt,
-				              dataopts=dataopt)
+							  optimizeropts=optim_opt, epocheropts=epocheropt,
+							  dataopts=dataopt)
 				opt_list.append(opt)
 		return opt_list
 
@@ -785,23 +765,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=2,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -851,23 +831,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=2,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -897,23 +877,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=True,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=True,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=2e-5,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=2e-5,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -951,23 +931,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=8,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=8,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1003,23 +983,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=2,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1057,23 +1037,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=2,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1114,23 +1094,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=2,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1166,23 +1146,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True, divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=True,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=True,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=.1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=1e-4,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=1e-4,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1220,23 +1200,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True, divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=True,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=True,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=.1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=1e-4,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=1e-4,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1276,23 +1256,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=2,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=2,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.0,
-		                       weight_decay=1e-4,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.0,
+							   weight_decay=1e-4,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1336,23 +1316,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True, divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=True,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=True,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=.1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=1e-4,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=1e-4,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1395,23 +1375,23 @@ class ICML19(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True, divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=True,
-		                   weightinit=lambda x: x.normal_(0, 0.03),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=True,
+						   weightinit=lambda x: x.normal_(0, 0.03),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=.001,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=1e-4,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=1e-4,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1424,11 +1404,11 @@ class NIN(Experiment_):
 	def collect_opts(self):
 		opt_list = []
 		epocheropt = EpocherOpts(self.save_results,
-		                         epochnum=150,
-		                         batchsz=128,
-		                         shuffledata=True,
-		                         numworkers=2,
-		                         gpu=True)
+								 epochnum=150,
+								 batchsz=128,
+								 shuffledata=True,
+								 numworkers=2,
+								 gpu=True)
 		datasets = ['cifar100']
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
@@ -1436,7 +1416,7 @@ class NIN(Experiment_):
 				for isrelu in [True]:
 					model_opt, optim_opt = model(dataopt)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
-					              dataopts=dataopt)
+								  dataopts=dataopt)
 					opt_list.append(opt)
 		return opt_list
 
@@ -1471,23 +1451,23 @@ class NIN(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True, divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=3,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=True,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=3,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=True,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=2e-3,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=1e-4,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=1e-4,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim
@@ -1527,23 +1507,23 @@ class NIN(Experiment_):
 		''' Net Options'''
 		netdict = dict(exact=True,divgreg=False)
 		opts_net = NetOpts(model_string,
-		                   input_channelsize=8,
-		                   inputspatszvalidator=lambda x: x == 32,
-		                   data_transforms=data_transforms,
-		                   classicNet=False,
-		                   weightinit=lambda x: x.normal_(0, 0.05),
-		                   biasinit=lambda x: x.zero_(),
-		                   customdict=netdict
-		                   )
+						   input_channelsize=8,
+						   inputspatszvalidator=lambda x: x == 32,
+						   data_transforms=data_transforms,
+						   classicNet=False,
+						   weightinit=lambda x: x.normal_(0, 0.05),
+						   biasinit=lambda x: x.zero_(),
+						   customdict=netdict
+						   )
 		opts_optim = OptimOpts(lr=1,
-		                       lr_sched_lambda=lr_sched,
-		                       type='SGD',
-		                       momentum=0.9,
-		                       weight_decay=0,
-		                       dampening=0,
-		                       nestrov=False,
-		                       loss=NLLLoss(reduce=False)
-		                       )
+							   lr_sched_lambda=lr_sched,
+							   type='SGD',
+							   momentum=0.9,
+							   weight_decay=0,
+							   dampening=0,
+							   nestrov=False,
+							   loss=NLLLoss(reduce=False)
+							   )
 		'''Optimizer Options'''
 
 		return opts_net, opts_optim

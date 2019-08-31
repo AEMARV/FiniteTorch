@@ -36,6 +36,7 @@ class LogSumExp(Function):
 		return grad_input,None,None
 
 
+
 def sample(lp:Tensor,axis=1,numsamples=1,MAP=False):
 	lastaxis = lp.ndimension() -1
 	lpt = lp.transpose(lastaxis,axis)
@@ -47,9 +48,108 @@ def sample(lp:Tensor,axis=1,numsamples=1,MAP=False):
 	logprob[logprob!=logprob] = float('Inf')
 	logprob = logprob.min(dim=axis,keepdim=True)[0]
 
-	#logprob = logprob.sum(dim=(1,2,3,4),keepdim=True)
-	return samps.detach(),logprob
+	return None,None
 
+def sample_manual( lp: Tensor, axis=1, manualrand=None):
+	lp = lp.transpose(0, axis)
+	p = lp.exp()
+	cumprob = p.cumsum(dim=0)
+
+	if manualrand is not None:
+		rand = manualrand
+		rand = rand.transpose(axis, 0)
+	else:
+		rand = torch.rand_like(p[0:1])
+	samps = cumprob >= rand
+	samps[1:] = samps[1:] ^ samps[0:-1]
+	samps = samps.type_as(p).detach()
+	logprob = samps * lp
+	logprob[logprob != logprob] = 0
+	logprob = logprob.sum(dim=0, keepdim=True)
+	samps = samps.transpose(0, axis)
+	logprob = logprob.transpose(0, axis)
+	return samps.detach(), logprob
+
+def max_lprob(mother,model,dim):
+	lrate = (mother - model)
+	max_lrate= lrate.min(dim=dim , keepdim=True)[0]
+	max_logical_ind = (lrate == max_lrate).float()
+
+	max_logical_ind = max_logical_ind / max_logical_ind.sum(dim=dim,keepdim=True)
+	max_lprob = (max_logical_ind * lrate).sum(dim=dim,keepdim=True)
+	return max_lprob
+def max_correction(tensor,dim):
+	max = tensor.max(dim=dim,keepdim=True)[0]
+	max_inds = (tensor == max).float()
+	max_inds = max_inds/max_inds.sum(dim=dim,keepdim=True)
+	max_inds = sample_manual(max_inds.log(), dim,1)[0]
+	max = (tensor*max_inds)
+	max[max != max] = float(0)
+	max = max.sum(dim=dim, keepdim=True)
+	return max
+def min_correction(tensor,dim):
+	min = -max_correction(-tensor,dim)
+	return min
+def sample_liklihood(lp,axis=1,numsamples=1):
+	lastaxis = lp.ndimension() - 1
+	lporig = lp
+	lpunif = torch.zeros_like(lp)
+	lpunif = lp.exp() * 0 - (lp.exp() * 0).logsumexp(dim=1, keepdim=True)
+	samplinglp = lpunif
+	lpt = samplinglp.transpose(lastaxis, axis)
+	M = Multinomial(total_count=numsamples, logits=lpt)
+	samps = M.sample().detach()
+	samps = samps.transpose(lastaxis, axis) / numsamples
+	logprob = (lporig - (samps.detach()).log())
+	logprob[logprob != logprob] = float('Inf')
+	logprob = logprob.min(dim=axis, keepdim=True)[0]
+
+	lpmodel = min_correction(lpunif - lporig, axis)
+
+	return samps.detach(), logprob, lpmodel
+
+def softmin(lp,axis,coef=1):
+	min = -(-lp*coef).logsumexp(dim=axis,keepdim=True)/coef
+	return min
+def softmin_pair(lp1,lp2):
+	return -LSE_pair(-lp1,-lp2)
+def softmax_pair(lp1,lp2):
+	return LSE_pair(lp1,lp2)
+
+def LSE_pair(lp1,lp2):
+	m = torch.max(lp1,lp2)
+	lp1 = lp1- m
+	lp2 = lp2 - m
+	ret = (lp1.exp() + lp2.exp()).log()
+	ret += m
+	return ret
+def renyi_prob(lq,lp, alpha):
+	divg = (alpha*lp - (alpha-1)*lq).logsumexp(dim=1,keepdim=True)/(alpha-1)
+	return -divg
+def sampleunif(lp:Tensor,axis=1,numsamples=1):
+	''' Samples from the random variables uniformly
+	A model is given in the probability space with logit vector lp
+	The probability that the sample is in the model is calculated.
+
+	'''
+	lastaxis = lp.ndimension() -1
+	lporig = lp
+	lpunif = torch.zeros_like(lp)
+	lpunif = lpunif - (lpunif).logsumexp(dim=1,keepdim=True)
+	lpt = lpunif.transpose(lastaxis,axis)
+	M = Multinomial(total_count=numsamples,logits=lpt)
+	samps = M.sample().detach()
+	samps = samps.transpose(lastaxis,axis)/numsamples
+	logprob = (lporig-(samps.detach()).log())
+	logprob[logprob!=logprob] = float('Inf')
+	logprob = logprob.min(dim=axis,keepdim=True)[0]
+	# lpmodel = (lpunif-lporig).min(dim=axis,keepdim=True)[0]
+	# TODO min
+	lpmodel = softmin(lpunif-lporig,axis)
+	# lpmodel= (lpunif-lporig).min(dim=1,keepdim=True)[0]# -  float(lporig.shape[1])
+	# lpmodel = renyi_prob(lpunif,lporig,1)
+	inmodel_lprobs = logprob + lpmodel - lpunif.mean(dim=1, keepdim=True)  # - max_correction(-lporig, axis)
+	return None, None, None
 
 def sample_mine(lp: Tensor, axis=1,numsamples=1):
 	p = lp.exp()
@@ -91,20 +191,9 @@ def sampleprob_mine(p: Tensor, axis=1,numsamples=1):
 	samps = samps.type_as(p)
 	return samps.detach(),None
 
-def sampleprob(p:Tensor,axis:int,numsamples):
-	lastaxis = p.ndimension() - 1
-	p = p.transpose(lastaxis, axis)
-	M = Multinomial(total_count=numsamples, probs=p)
-	# D = Dirichlet((lp.exp())*(numsamples.float())/(lp.size(lastaxis)))
-	samps = M.sample()
-	samps = samps.transpose(lastaxis, axis) / numsamples
-	return samps,None
-
-
-def sample_indpt(p:Tensor):
-	sample = (p> torch.rand_like(p)).float()
-	coef = 1/(p+1e-7)
-	return sample
+def sampleprob(p:Tensor,axis:int):
+	samps, logprob = sample_manual(p.log(),axis=axis)
+	return samps,logprob
 
 
 def sample_exp(p:Tensor):
@@ -131,74 +220,3 @@ def sample_map(lp,axis,numsamps):
 	logprob[logprob!=logprob] = 0
 	return samp,logprob.sum(dim=axis,keepdim=True)
 
-
-def p_map_backwardv1(lx:Tensor,lkernel:Tensor,lbias:Tensor,xsample:Tensor,log_ynorm,pad,stride,dzdynorm:Tensor):
-	lkernel = lkernel.detach()
-	lx = lx.detach()
-	xsample = xsample.detach()
-	lbias = lbias.detach()
-	dzdy_forx_and_w = dzdynorm
-	dzdy_forw_norm_component = (-log_ynorm.exp())*(dzdy_forx_and_w.sum(dim=1,keepdim=True))#*ynorm_sampled
-	with torch.enable_grad():
-		xsample.requires_grad = True
-		ytemp = F.conv2d(xsample,lkernel*0 +1,padding=pad,stride=stride)
-		dzdx, = torch.autograd.grad(ytemp,xsample,grad_outputs=dzdy_forx_and_w ,only_inputs=True)
-	with torch.enable_grad():
-		lkernel.requires_grad = True
-		ytemp = F.conv2d(xsample,lkernel,padding=pad,stride=stride)
-		dzdlw, = torch.autograd.grad(ytemp,lkernel,grad_outputs=dzdy_forx_and_w,only_inputs=True)
-		dzdlw = dzdlw
-	with torch.enable_grad():
-		lkernel.requires_grad = True
-		ytemp = F.conv2d(xsample,lkernel,padding=pad,stride=stride)
-		dzdlw2, = torch.autograd.grad(ytemp,lkernel,grad_outputs=dzdy_forw_norm_component,only_inputs=True)
-	dzdlx = -xsample * ((dzdx.abs().sum(dim=(1,2,3),keepdim=True))!=0).float()
-	dzdlbias = ((dzdynorm -log_ynorm.exp()*(dzdynorm.sum(dim=1,keepdim=True)))).sum(dim=2,keepdim=True).sum(dim=3,keepdim=True)
-	dzdlbias = dzdlbias.sum(dim=0,keepdim=True)
-	dzdlw = dzdlw + dzdlw2
-	return dzdlx , dzdlw, dzdlbias
-
-
-def p_map_backward_i(lx:Tensor,lkernel:Tensor,lbias:Tensor,kersample:Tensor,log_ynorm,trials,pad,stride,dzdynorm:Tensor):
-	lkernel = lkernel.detach()
-	lx = lx.detach()
-	dzdy_forx_and_w = dzdynorm
-	dzdy_forw_norm_component = (-log_ynorm.exp())*dzdy_forx_and_w.sum(dim=1,keepdim=True)#*ynorm_sampled
-	with torch.enable_grad():
-		lx.requires_grad = True
-		ytemp = F.conv2d(lx,kersample,padding=pad,stride=stride)
-		dzdx, = torch.autograd.grad(ytemp,lx,grad_outputs=dzdy_forx_and_w,only_inputs=True)
-
-	with torch.enable_grad():
-		lkernel.requires_grad = True
-		ytemp = F.conv2d(lx*0 +1,lkernel,padding=pad,stride=stride)
-		dzdlw, = torch.autograd.grad(ytemp,lkernel,grad_outputs=dzdy_forx_and_w,only_inputs=True)
-	with torch.enable_grad():
-		lkernel.requires_grad = True
-		ytemp = F.conv2d(lx,kersample,padding=pad,stride=stride)
-		dzdlx2, = torch.autograd.grad(ytemp,lkernel,grad_outputs=dzdy_forw_norm_component,only_inputs=True)
-	dzdlx = dzdx + dzdlx2
-	dzdlw = dzdlw *kersample
-
-	return dzdlx , dzdlw
-
-
-def p_map_backwardv2(lx:Tensor,lkernel:Tensor,lbias:Tensor,xsample:Tensor,log_ynorm,trials,pad,stride,dzdynorm:Tensor):
-	dzdy_forx_and_w = dzdynorm
-	dzdy_forw_norm_component = (-log_ynorm.exp())*dzdy_forx_and_w.sum(dim=1,keepdim=True)#*ynorm_sampled
-	kernelsample,l = sample(lkernel,1,1)
-	with torch.enable_grad():
-		xsample.requires_grad = True
-		kernelsample.requires_grad = True
-		ytemp = F.conv2d(xsample,kernelsample,padding=pad,stride=stride)
-		dzdx,dzdlw = torch.autograd.grad(ytemp,[xsample,kernelsample],grad_outputs=dzdy_forx_and_w,only_inputs=True)
-
-	with torch.enable_grad():
-		lkernel.requires_grad = True
-		ytemp = F.conv2d(xsample,kernelsample,padding=pad,stride=stride)
-		dzdlx2,dzdlw2 = torch.autograd.grad(ytemp,[xsample,kernelsample],grad_outputs=dzdy_forw_norm_component,only_inputs=True)
-	dzdlx = (dzdx ) * lx.exp()
-	dzdlbias = ((dzdynorm -log_ynorm.exp()*dzdynorm.sum(dim=1,keepdim=True))).sum(dim=2,keepdim=True).sum(dim=3,keepdim=True)
-	dzdlw = (dzdlw + dzdlw2*0) * lkernel.exp()
-
-	return dzdlx , dzdlw, dzdlbias*0

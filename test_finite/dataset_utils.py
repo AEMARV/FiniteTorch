@@ -40,18 +40,19 @@ class Joint:
 
 		joint = -torch.rand(self.inputdim, self.outputdim).log()
 		joint = joint / joint.sum()
-		px  = joint.sum(dim=1,keepdim=True)
+		px  = (joint*0+1).sum(dim=1,keepdim=True)
+		px = px/px.sum()
 		pygx =  joint / joint.sum(dim=1,keepdim=True)
-		pygx = sampleprob(pygx,1,1)[0]
+		pygx = sampleprob(pygx,1)[0]
 		joint = pygx * px
 		return joint.detach()
 
 	def create_dataset(self, numsamples ) -> SyntheticData:
 		joint = self.jointdist
 		sh = joint.shape
-		jointvec = joint.view([1, joint.shape[0] * joint.shape[1], 1,1])  # type: Tensor
+		jointvec = joint.reshape((1, joint.shape[0] * joint.shape[1], 1,1))  # type: Tensor
 		samples= jointvec.repeat([numsamples, 1, 1, 1])
-		samples = sampleprob(samples, 1, 1)[0].view([numsamples, sh[0], sh[1], 1,1])
+		samples = sampleprob(samples, 1)[0].view([numsamples, sh[0], sh[1], 1,1])
 		xsamples = samples.sum(dim=2, keepdim=True)
 		ysamples = samples.sum(dim=1, keepdim=True)
 		ysamples = ysamples.max(dim=2)[1].squeeze()

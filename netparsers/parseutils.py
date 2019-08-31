@@ -98,14 +98,12 @@ def parse_layer_string(layer_string,in_n_channel,in_icnum,blockidx_dict):
 		fnum = int(layer_opts['f'])
 		stride = int(layer_opts['stride'])
 		coef = float(layer_opts['coef'])
-		isrelu = bool(int(layer_opts['isrelu']))
+		isrelu = bool(int(layer_opts['isrelu'])) if 'isrelu' in layer_opts.keys() else False
 		islast = bool(int(layer_opts['islast'])) if 'islast' in layer_opts.keys() else False
 		sampopt = int(layer_opts['sampopt']) if 'sampopt' in layer_opts.keys() else 0
 		indpt_components = int(layer_opts['icnum']) if 'icnum' in layer_opts.keys() else 1
-		drop_prob = float(layer_opts['droprate']) if 'droprate' in layer_opts.keys() else 0
 		isbiased = ((layer_opts['bias'] == '1')) if 'bias' in layer_opts.keys() else False
 		exact = bool(int(layer_opts['exact'])) if 'exact' in layer_opts.keys() else False
-		#stride = int(layer_opts['stride'] if 'stride' in layer_opts.keys() else 1)
 		pad = layer_opts['pad']
 		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
 		param = get_init(layer_opts['param'])
@@ -128,6 +126,52 @@ def parse_layer_string(layer_string,in_n_channel,in_icnum,blockidx_dict):
 		               blockidx=blockidx)
 		out_n_channel = fnum
 		out_icnum = indpt_components
+
+	elif layer_name_str == 'mapi':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'])
+		coef = float(layer_opts['coef'])
+		isrelu = bool(int(layer_opts['isrelu'])) if 'isrelu' in layer_opts.keys() else False
+		islast = bool(int(layer_opts['islast'])) if 'islast' in layer_opts.keys() else False
+		sampopt = int(layer_opts['sampopt']) if 'sampopt' in layer_opts.keys() else 0
+		indpt_components = int(layer_opts['icnum']) if 'icnum' in layer_opts.keys() else 1
+		isbiased = ((layer_opts['bias'] == '1')) if 'bias' in layer_opts.keys() else False
+		exact = bool(int(layer_opts['exact'])) if 'exact' in layer_opts.keys() else False
+		pad = layer_opts['pad']
+		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
+		param = get_init(layer_opts['param'])
+		layer = BayesFuncI(fnum=fnum,
+		                icnum=indpt_components,
+		               kersize=ksize,
+		               inp_chan_sz=in_n_channel,
+		               inp_icnum = in_icnum,
+		               isbiased=isbiased,
+		               isrelu=isrelu,
+		               biasinit=param,
+		               samplingtype=sampopt,
+		               padding=pad,
+		               stride=stride,
+		               paraminit=param,
+		               isstoch=stoch,
+		               coefinit=coef,
+		               exact=exact,
+					   islast=islast,
+		               blockidx=blockidx)
+		out_n_channel = fnum
+		out_icnum = indpt_components
+	elif layer_name_str =='sample':
+		layer = Sampler(blockidx=blockidx)
+		out_n_channel = in_n_channel
+		out_icnum = in_icnum
+	elif layer_name_str =='psample':
+		layer = PriorSampler(blockidx=blockidx)
+		out_n_channel = in_n_channel +1
+		out_icnum = in_icnum
+	elif layer_name_str =='rsample':
+		layer = RejectSampler(blockidx=blockidx)
+		out_n_channel = in_n_channel
+		out_icnum = in_icnum
 
 	elif layer_name_str == 'mdconv':
 		ksize = int(layer_opts['r'])
