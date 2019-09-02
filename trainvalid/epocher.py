@@ -714,7 +714,7 @@ class Epocher(object):
 						trys,\
 						log_prob_correct_temp,\
 						stats= self.likelihood_optimization(inputs,labels,usemin=False,concentration=1)
-						(-self.model.get_lrob_model()[0]/128).backward()
+						# (-self.model.get_lrob_model()[0]/128).backward()
 						# self.prior_optimization(inputs, labels, coef=1.0, mode='likelihood',concentrate=10)
 						# self.renyi_prior_MCMC(inputs,coef=priorcoef)
 						if self.opts.netopts.customdict['divgreg']:

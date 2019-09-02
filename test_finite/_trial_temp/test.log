@@ -1,0 +1,2 @@
+2019-05-20 17:18:08-0400 [-] Log opened.
+2019-05-20 17:18:09-0400 [-] :0: builtins.UserWarning: You do not have a working installation of the service_identity module: 'No module named 'service_identity''.  Please install it from <https://pypi.python.org/pypi/service_identity> and make sure all of its dependencies are satisfied.  Without the service_identity module, Twisted can perform only rudimentary TLS client hostname verification.  Many valid certificate/hostname mappings may be rejected.

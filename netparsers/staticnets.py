@@ -181,6 +181,7 @@ class StaticNet(MyModule):
 		stat_dict = dict(jsd=[])
 		prior = None
 		# rnd = torch.rand(x.shape[0],1,1,1,1,dtype=x.dtype).to(x.device)
+		inputprior= None
 		for i,layer in enumerate(self.layerlist):
 			if not isinstance(layer,MyModule):
 				x = layer(x)
@@ -195,7 +196,7 @@ class StaticNet(MyModule):
 					x, logprob_temp = layer(x, mode=mode, manualrand=rnd,concentration=concentration)
 					logprob = self.accumulate_lprob_pair(logprob_temp, logprob, usemin=useminpair)
 				elif isinstance(layer,BayesFunc):
-					x, logprob_temp = layer(x, mode=mode, manualrand=rnd,concentration=concentration)
+					x, logprob_temp = layer(x, mode=mode, manualrand=rnd,concentration=concentration,inputprior=inputprior)
 					# lrobmodel,prior = layer.get_lrob_model(prior)
 					# logprob_temp = lrobmodel + (x*0)
 					logprob_temp = self.accumulate_lprob(logprob_temp, usemin=usemin)
@@ -203,6 +204,7 @@ class StaticNet(MyModule):
 
 				else:
 					x = layer(x,isuniform=False,isinput = i==0)
+				inputprior = layer.get_output_prior(inputprior)
 
 			if hasnan(x):
 				raise Exception(str(layer) + 'has nan')
