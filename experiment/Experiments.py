@@ -25,8 +25,8 @@ class MAP(Experiment_):
 		for dataset in datasets:
 			dataopt = DataOpts(dataset)
 			for model in [self.Hello_Map_variables]:
-				for reg_coef in [1/50000]:#[x/10 for x in range(11)]:
-					model_opt, optim_opt = model(dataopt, reg_coef=reg_coef,lr=0.01,init_coef=0)
+				for reg_coef in [1/50000]:#[x/10 for x in range(11)]
+					model_opt, optim_opt = model(dataopt, reg_coef=reg_coef,lr=.1,init_coef=0.0000001)
 					opt = allOpts(model.__name__, netopts=model_opt, optimizeropts=optim_opt, epocheropts=epocheropt,
 								  dataopts=dataopt)
 					opt_list.append(opt)
@@ -42,21 +42,21 @@ class MAP(Experiment_):
 		convparamsigm = 'param:logdirich,stoch:0,isrelu:{},coef:1'.format('0')
 		d = '->'
 		finish = 'fin'
-		model_string += 'mapj|r:3,f:64,pad:same,bias:1,stride:1,{}'.format(convparam) + d# + nl + d
+		model_string += 'mapd|r:3,f:64,pad:same,bias:1,stride:1,{}'.format(convparam) + d# + nl + d
 
-		model_string += 'mapj|r:3,f:64,pad:same,bias:1,stride:1,{}'.format(convparam) + d #+ nl + d
+		model_string += 'mapd|r:3,f:64,pad:same,bias:1,stride:1,{}'.format(convparam) + d #+ nl + d
 		model_string += 'klavgpool|r:3,f:128,pad:same,stride:2,bias:1' + d
 
-		model_string += 'mapj|r:3,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d # + nl + d
+		model_string += 'mapd|r:3,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d # + nl + d
 		model_string += 'klavgpool|r:3,f:128,pad:same,stride:2,bias:1' + d
 
-		model_string += 'mapj|r:3,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d #+ nl + d
+		model_string += 'mapd|r:3,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d #+ nl + d
 		model_string += 'klavgpool|r:3,f:128,pad:same,stride:2,bias:1' + d
 
-		model_string += 'mapj|r:3,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d#   + nl + d
+		model_string += 'mapd|r:3,f:128,pad:same,bias:1,stride:1,{}'.format(convparam) + d#   + nl + d
 		model_string += 'klavgpool|r:3,f:64,pad:same,stride:2,bias:1' + d
 
-		model_string += 'mapj|r:1,f:' + str(data_opts.classnum) + ',pad:valid,bias:1,stride:1,islast:1,{}'.format(
+		model_string += 'mapd|r:1,f:' + str(data_opts.classnum) + ',pad:valid,bias:1,stride:1,islast:1,{}'.format(
 			convparam)  + d# + nl + d
 		model_string += 'klavgpool|r:2,f:32,pad:valid,stride:1,bias:1' + d# + nl + d
 
@@ -101,30 +101,32 @@ class MAP(Experiment_):
 		model_string = ''
 		d = '->'
 		finish = 'fin'
-		samp = 'fsample' + d
+		samp = 'sample' + d
+		rsamp = 'sample'+ d
 		convparam = 'param:log,coef:{}'.format(str(init_coef))
 		convparamend = 'param:log,coef:{}'.format(str(init_coef))
 
 
 
-		# model_string += samp
-		model_string += 'mapj|r:3,f:1,icnum:32,pad:same,bias:1,stride:2,{}'.format(convparam) + d
+		# model_string += rsamp
+
+		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:1,stride:2,{}'.format(convparam) + d
 		# model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
 		model_string += samp
-		model_string += 'mapj|r:3,f:1,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparam) + d
+		model_string += 'map|r:3,f:2,icnum:32,pad:same,bias:1,stride:2,{}'.format(convparam) + d
 		# model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
 		model_string += samp
-		model_string += 'mapj|r:3,f:1,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparam) + d
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparam) + d
 		# model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
 		model_string += samp
-		model_string += 'mapj|r:3,f:1,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparam) + d
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparam) + d
 		# model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
 		model_string += samp
-		model_string += 'mapj|r:3,f:1,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparamend) + d
+		model_string += 'map|r:3,f:2,icnum:64,pad:same,bias:1,stride:2,{}'.format(convparam) + d
 		# model_string += 'klavgpool|r:3,pad:same,stride:2' + d
 
 		model_string += samp
@@ -138,6 +140,7 @@ class MAP(Experiment_):
 		'''Data OPTs'''
 		'''LR SCHED'''
 		data_transforms = [BintoLogFSDFact]
+		# data_transforms = []
 		lr_sched = discrete_exp_decay_lr(init_lr=1, step=2, exp_decay_perstep=0)
 
 		''' Net Options'''

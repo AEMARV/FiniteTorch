@@ -177,7 +177,40 @@ def parse_layer_string(layer_string,in_n_channel,in_icnum,blockidx_dict):
 		layer = BayesFuncJ(fnum=fnum,
 		                icnum=indpt_components,
 		               kersize=ksize,
-		               inp_chan_sz=in_n_channel,
+		               inp_chan_sz=int(in_n_channel/2),
+		               inp_icnum = in_icnum,
+		               isbiased=isbiased,
+		               isrelu=isrelu,
+		               biasinit=param,
+		               samplingtype=sampopt,
+		               padding=pad,
+		               stride=stride,
+		               paraminit=param,
+		               isstoch=stoch,
+		               coefinit=coef,
+		               exact=exact,
+					   islast=islast,
+		               blockidx=blockidx)
+		out_n_channel = fnum
+		out_icnum = indpt_components
+	elif layer_name_str == 'mapd':
+		ksize = int(layer_opts['r'])
+		fnum = int(layer_opts['f'])
+		stride = int(layer_opts['stride'])
+		coef = float(layer_opts['coef'])
+		isrelu = bool(int(layer_opts['isrelu'])) if 'isrelu' in layer_opts.keys() else False
+		islast = bool(int(layer_opts['islast'])) if 'islast' in layer_opts.keys() else False
+		sampopt = int(layer_opts['sampopt']) if 'sampopt' in layer_opts.keys() else 0
+		indpt_components = int(layer_opts['icnum']) if 'icnum' in layer_opts.keys() else 1
+		isbiased = ((layer_opts['bias'] == '1')) if 'bias' in layer_opts.keys() else False
+		exact = bool(int(layer_opts['exact'])) if 'exact' in layer_opts.keys() else False
+		pad = layer_opts['pad']
+		stoch = bool(layer_opts['stoch']=='1') if 'stoch' in layer_opts else False
+		param = get_init(layer_opts['param'])
+		layer = BayesFuncD(fnum=fnum,
+		                icnum=indpt_components,
+		               kersize=ksize,
+		               inp_chan_sz=int(in_n_channel),
 		               inp_icnum = in_icnum,
 		               isbiased=isbiased,
 		               isrelu=isrelu,
@@ -203,6 +236,10 @@ def parse_layer_string(layer_string,in_n_channel,in_icnum,blockidx_dict):
 		out_icnum = in_icnum
 	elif layer_name_str =='rsample':
 		layer = RejectSampler(blockidx=blockidx)
+		out_n_channel = in_n_channel
+		out_icnum = in_icnum
+	elif layer_name_str =='ratesample':
+		layer = RateSampler(blockidx=blockidx)
 		out_n_channel = in_n_channel
 		out_icnum = in_icnum
 	elif layer_name_str =='fsample':

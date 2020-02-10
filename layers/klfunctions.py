@@ -41,7 +41,7 @@ class KLConvStoch(Function):
 		dzdin , dzdlog_filt = klconvs.backward(grad_outputs,input,log_filt,random)
 		#dzdin, dzdlog_filt = klconvs.backward_rand(grad_outputs, input, log_filt)
 		return dzdin, dzdlog_filt
-
+from typing import Any
 class md_conv(Function):
 	@staticmethod
 	def normal_klconv(input,log_filt:Tensor):
@@ -335,7 +335,21 @@ class LossCrossEntropy(Function):
 		grad_input = -((target_one_hot)) * grad_output
 		return grad_input, None
 
+class Alpha_Lnorm(Function):
+	@staticmethod
+	def forward(ctx: Any,input: Any,dim,alpha, **kwargs: Any):
+		norm_input = input.log_softmax(dim=dim)
+		ctx.save_for_backward(norm_input)
+		ctx.constant = (dim,alpha)
+		return norm_input
+	@staticmethod
+	def backward(ctx: Any, grad_outputs: Any):
+		ninput, = ctx.saved_tensors
+		dim,alpha = ctx.constant
+		g = grad_outputs - ((grad_outputs.sum(dim=dim,keepdim=True))*((ninput*alpha).softmax(dim=dim)))
+		return g,None,None
 
+alpha_lnorm = Alpha_Lnorm.apply
 class jointConv(Function):
 	@staticmethod
 	def forward(ctx, input: torch.Tensor, log_filt: Tensor):

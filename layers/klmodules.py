@@ -8,6 +8,10 @@ import os
 from torchvision.utils import save_image,make_grid
 import math
 from definition import concentration as C
+from definition import *
+from abc import abstractmethod
+
+
 
 class MyModule(Module):
 	def __init__(self, *args, blockidx=None, **kwargs):
@@ -49,7 +53,7 @@ class MyModule(Module):
 		for m in self.children():
 			inputs = m.forward(inputs)
 
-			if isinstance(m, MyModule) and not isinstance(m,Sampler):
+			if isinstance(m, MyModule) or isinstance(m,Sampler):
 				if isinstance(inputs, Tuple):
 					inputs = inputs[0]
 				m.print_output(inputs, epoch_num, batch_num)
@@ -149,6 +153,7 @@ class KLConv_Base(MyModule):
 		self.axisdim=-2
 		self.icnum=icnum
 		self.inp_icnum = inp_icnum
+		self.spsz = kersize
 		self.fnum = fnum
 		self.chansz = inp_chan_sz
 		self.coefinit  = coefinit
@@ -198,6 +203,9 @@ class KLConv_Base(MyModule):
 		k = self.get_log_kernel(kernel=kernel)
 		k = k.reshape((self.fnum * self.icnum, self.inp_icnum * self.chansz, self.kernel.shape[2], self.kernel.shape[3]))
 		return k
+
+	def get_kernel(self):
+		return self.kernel
 
 	def get_prob_kernel(self)-> torch.Tensor:
 
@@ -262,9 +270,9 @@ class KLConv_Base(MyModule):
 		return e
 	def get_log_symbols(self):
 		if self.input_is_binary:
-			syms = self.kernel_shape[1]*math.log(2)
+			syms = self.chansz*math.log(2)
 		else:
-			syms = math.log(self.kernel_shape[1])
+			syms = math.log(self.chansz)
 		return syms
 
 
@@ -285,7 +293,7 @@ class BayesFunc(KLConv_Base):
 		self.axisdim = 1
 		self.build()
 		self.exact = exact
-		if exact and self.kernel_shape[2] >1:
+		if exact and self.inp_icnum[2] >1:
 			raise Exception("Exact Calculation of gradient is not possible with receptive filed >1")
 		self.useless_counter = 0
 		self.write_images = write_images
@@ -328,7 +336,7 @@ class BayesFunc(KLConv_Base):
 	def get_log_kernel_conv(self,k=None):
 		'''Returns a tensor of size (self.fnum * self.icnum, self.inp_icnum * self.chansz, self.kernel.shape[2], self.kernel.shape[3])'''
 		k,norm = self.get_log_kernel()
-		k = k.reshape((self.fnum * self.icnum, self.inp_icnum * self.chansz, k.shape[3], k.shape[4]))
+		k = k.reshape((self.fnum * self.icnum, -1, k.shape[3], k.shape[4]))
 		return k, norm
 
 	def get_kernel_expanded_format(self,k):
@@ -455,7 +463,7 @@ class BayesFunc(KLConv_Base):
 
 		norm = None
 		if kernel is None:
-			k = self.kernel
+			k = self.get_kernel()
 		sp1 = k.shape[4]
 		sp2 = k.shape[5]
 		k = k.reshape((self.fnum*self.icnum,self.chansz,self.inp_icnum,sp1,sp2))
@@ -486,7 +494,7 @@ class BayesFunc(KLConv_Base):
 		# Output prior is of size (fnum, 1, 1, 1, out_ic)
 		output_prior = output_prior.unsqueeze(dim=5)
 		# Output prior is of size (fnum, 1, 1, 1, out_ic,1)
-		kernel = self.get_kernel_expanded_format(self.kernel)
+		kernel = self.get_kernel_expanded_format(self.get_kernel())
 		indptcompts = kernel.shape[1]* kernel.shape[4]*kernel.shape[5]
 		# kernle is now ( fnum:0,out_ic:1,in_ch:2,in_ic:3, sp_sz_1:4, sp_sz_2:5)
 		kernel = kernel.permute((0,2,4,5,1,3))
@@ -513,9 +521,9 @@ class BayesFunc(KLConv_Base):
 		## Input prior dim is (1,inp_ch,1,1,inp_icnum)
 		## kernel shape is (fnum,icnum,inp_ch,inp_icnum,kersize,kersize)
 		## bias shape is (1,fnum, 1,1, icnum)
-		k = self.kernel
+		k = self.get_kernel()
 		k = k - k.logsumexp(dim=2,keepdim=True)
-
+		conc = 1000
 		sp_dim1= 4
 		sp_dim2= 5
 		in_ch_dim= 2
@@ -530,16 +538,16 @@ class BayesFunc(KLConv_Base):
 			inputprior = inputprior.transpose(5, 3)
 		## Input prior dim is (1,1,inp_ch,inp_icnum,1,1)
 		## kernel shape is (fnum,icnum,inp_ch,inp_icnum,kersize,kersize)
-		lrob = (inputprior - k).min(dim=in_ch_dim,keepdim=True)[0]
+		lrob = -(-(inputprior - k)*conc).logsumexp(dim=in_ch_dim,keepdim=True)/conc
 		lrob = lrob.sum(dim=(3,4,5),keepdim=True)
 		## lrob shape is (fnum,icnum,1,1,1,1)
 		lrob = lrob.squeeze(-1).permute((4,0,3,2,1))
 		## lrob shape is (1,fnum,1,1,icnum)
 		b = self.get_log_bias()[0]
 		lb = - math.log(b.shape[1]) - b
-		lrob = (lrob+ lb).min(dim=1,keepdim=True)[0]
+		lrob = -(-(lrob + lb)*conc).logsumexp(dim=1,keepdim=True)/conc
 
-		return lrob-0.1
+		return lrob - math.log(2)
 
 	def forward(self,lx,prior=None,
 	            inputprior=None,
@@ -576,10 +584,9 @@ class BayesFunc(KLConv_Base):
 		else:
 			ly += prior
 		lp = None
-		lnorm = (ly).logsumexp(dim=1,keepdim=True)
 		if isinput:
 			lp = None
-		ly = ly - lnorm
+		ly = alpha_lnorm(ly,1,16)
 		return ly, lp
 
 	def forward_intersect(self,lx,logprob, prior=None,isuniform=False,isinput=False, mode=None, manualrand = None):
@@ -622,22 +629,86 @@ class BayesFunc(KLConv_Base):
 
 
 class BayesFuncJ(BayesFunc):
+	def build(self):
+		super(BayesFuncJ,self).build()
+		self.bias_model = Parameter(data=torch.zeros(1))
+		self.bias.requires_grad = True
+		self.register_parameter('model_bias', self.bias_model)
+
+	# def get_log_kernel(self,kernel=None,index=0):
+	# 	return self.kernel
+	# def get_log_bias(self,index=0):
+	# 	return self.bias
+	def get_kernel(self):
+		ker = torch.cat([self.kernel,-self.kernel],dim=2)
+		m = ker.clamp_min(0)
+		ker = ker- m
+		ker = -(m + ((-m).exp()+ ker.exp()).log())
+		ker = ker - math.log(self.kernel.shape[2])
+		return ker
+	def get_lrob_model(self, inputprior):
+		## Input prior dim is (1,inp_ch,1,1,inp_icnum)
+		## kernel shape is (fnum,icnum,inp_ch,inp_icnum,kersize,kersize)
+		## bias shape is (1,fnum, 1,1, icnum)
+		k = self.get_kernel()
+		# k = k - k.logsumexp(dim=2,keepdim=True)
+		conc = 1000
+		sp_dim1= 4
+		sp_dim2= 5
+		in_ch_dim= 2
+		in_comp_dim= 3
+		out_ic_dim= 1
+		out_filt_dim = 0
+		if inputprior is None:
+			inputprior = k*0-math.log(k.shape[2])
+		else:
+			inputprior = inputprior.unsqueeze(0)
+			## Input prior dim is (1,1,inp_ch,1,1,inp_icnum)
+			inputprior = inputprior.transpose(5, 3)
+		## Input prior dim is (1,1,inp_ch,inp_icnum,1,1)
+		## kernel shape is (fnum,icnum,inp_ch,inp_icnum,kersize,kersize)
+		lrob = ((inputprior - k)).min(dim=in_ch_dim,keepdim=True)[0]
+		lrob = lrob.sum(dim=(3,4,5),keepdim=True)
+		## lrob shape is (fnum,icnum,1,1,1,1)
+		lrob = lrob.squeeze(-1).permute((4,0,3,2,1))
+		## lrob shape is (1,fnum,1,1,icnum)
+		b = self.get_log_bias()[0]
+		lb = - math.log(b.shape[1]) - b
+		lrob = ((lrob + lb)).min(dim=1,keepdim=True)[0]
+		temp =  self.bias_model.clamp_min(0)
+		logbias_model = temp  + ((-temp).exp() + (self.bias_model-temp).exp()).log()
+		return lrob - logbias_model
+
+	def get_log_kernel(self,kernel=None,index=0):
+		'''Output shape is (self.fnum*self.icnum,self.chansz,self.inp_icnum,sp1,sp2)'''
+
+		norm = None
+		if kernel is None:
+			k = self.get_kernel()
+		sp1 = k.shape[4]
+		sp2 = k.shape[5]
+		k = k.reshape((self.fnum*self.icnum,k.shape[2],self.inp_icnum,sp1,sp2))
+		k, norm = self.paraminit.get_log_kernel(k)
+		# k = k - ((k*10).logsumexp(dim=1,keepdim=True)/10)
+		return k,norm
+
+
 	def get_log_kernel_ratio_conv(self, inputprior):
 		''' Input prior is of size (1,ch,1,1,cmp)
 
 		kernel original shape is (fnum 0, icnum 1, ch 2, cmp 3, kersize 4,  kersize 5)
 		'''
-
-		fnum,icnum,ch,cmp,kersz1,kersz2 = self.kernel.shape
+		kernel = self.get_kernel()
+		fnum,icnum,ch,cmp,kersz1,kersz2 = kernel.shape
 		if inputprior is None:
-			inputprior = self.kernel*0 - math.log(ch)
+			inputprior = kernel*0 - math.log(ch)
 		else:
 			inputprior = inputprior.unsqueeze(0)
 			# inputprior shape is (1-0,1-1,ch-2,1-3,1-4,cmp-5)
 			inputprior= inputprior.transpose(3,5)
-		k = self.kernel - self.kernel.logsumexp(dim=2,keepdim=True)
-		k = k - inputprior
-		k = k.reshape((fnum*icnum,ch*cmp,kersz1,kersz2))
+		# k = self.get_kernel() - self.get_kernel().logsumexp(dim=2,keepdim=True)
+		kernel = kernel - inputprior
+		k = kernel.reshape((fnum*icnum,ch*cmp,kersz1,kersz2))
 		return k
 
 	def get_output_prior(self,inputprior):
@@ -646,7 +717,40 @@ class BayesFuncJ(BayesFunc):
 
 		return b
 
-	def forward(self,lx,prior=None,
+	def forward(self,x,prior=None,
+	            inputprior=None,
+	            isuniform=False,
+	            isinput=False,
+	            mode=None,
+	            manualrand = None,
+	            concentration=None):
+		self.inputshape= x.shape
+		if isinput:
+			pass
+			x= (x.exp()>0.5).float()
+			# lx = lx*10
+			# lx = lx - lx.logsumexp(dim=1,keepdim=True)
+		x = self.reshape_input_for_conv(x)
+		k = self.get_log_kernel_conv(self.get_kernel())[0]
+		ly = F.conv2d(x,k,stride=self.stride,padding=self.padding[0])
+		ly = self.reshape_input_for_nxt_layer(ly)
+		ly = ly + self.get_log_bias()[0]
+		ly = ly - math.log(ly.shape[1]) -  max_correction(ly,1)
+		if inputprior is not None and (hasinf(inputprior)or hasnan(inputprior)):
+			print("nan")
+		if hasinf(k) or hasnan(k):
+			print("nan")
+		if hasinf(x)or hasnan(x):
+			print("nan")
+		if hasinf(ly)or hasnan(ly):
+			print("nan")
+		# returns probability of y,m|x
+		if (ly> -math.log(ly.shape[1])).sum()>0:
+			# print("dude what?")
+			pass
+		return ly, None
+
+	def forwardv2(self,lx,prior=None,
 	            inputprior=None,
 	            isuniform=False,
 	            isinput=False,
@@ -656,9 +760,9 @@ class BayesFuncJ(BayesFunc):
 		self.inputshape= lx.shape
 		if isinput:
 			pass
-			# lx= (lx.exp()>0.5).float().log()
-			lx = lx*10
-			lx = lx - lx.logsumexp(dim=1,keepdim=True)
+			lx= (lx.exp()>0.5).float().log()
+			# lx = lx*10
+			# lx = lx - lx.logsumexp(dim=1,keepdim=True)
 		x = lx.exp()
 		x = self.reshape_input_for_conv(x)
 		k = self.get_log_kernel_ratio_conv(inputprior)
@@ -667,10 +771,40 @@ class BayesFuncJ(BayesFunc):
 		lm = self.get_lrob_model(inputprior)
 		ly = ly + lm
 		ly = ly + self.get_log_bias()[0]
-		# returns probability of y,m|x
 
+		ly = alpha_lnorm(ly,1,16)
 		return ly, None
 
+class BayesFuncD(BayesFunc):
+	def build(self):
+		self.kernel_shape = (self.fnum*self.icnum,self.chansz*self.inp_icnum,self.spsz,self.spsz)
+		super(BayesFuncD,self).build()
+	def get_log_kernel_conv(self,k=None):
+		return self.kernel,None
+	def get_log_bias(self,index=0):
+		return self.bias,None
+	def get_output_prior(self,inputprior):
+		return self.bias
+	def forward(self,x,prior=None,
+	            inputprior=None,
+	            isuniform=False,
+	            isinput=False,
+	            mode=None,
+	            manualrand = None,
+	            concentration=None):
+		if isinput:
+			pass
+			x= (x.exp()>0.5).float()
+			# lx = lx*10
+			# lx = lx - lx.logsumexp(dim=1,keepdim=True)
+
+		x = self.reshape_input_for_conv(x)
+		# k = torch.cat((self.kernel,-self.kernel),dim=1)
+		k = self.kernel
+		lratey = F.conv2d(x,k,stride=self.stride,padding=self.padding[0])
+		lratey = self.reshape_input_for_nxt_layer(lratey)
+		lratey = lratey + self.bias
+		return lratey,None
 
 """ Samplers"""
 class Sampler(MyModule):
@@ -701,7 +835,7 @@ class Sampler(MyModule):
 		return samps.detach(), logprob
 
 	def sample_manual(self, lp: Tensor, axis=1, manualrand=None, concentration=1):
-		lnorm = lp.logsumexp(dim=axis,keepdim=True)
+		lnorm = lp.logsumexp(dim=axis,keepdim=True).detach()
 		lp = lp-lnorm
 		lp = lp.transpose(0,axis)
 		p = lp.exp()
@@ -724,12 +858,11 @@ class Sampler(MyModule):
 		return samps.detach(), logprob
 
 	def sample_concentrated(self, lp: Tensor, axis=1, manualrand=None,concentration=1.0):
-		lp = lp*concentration
-		lnorm = lp.logsumexp(dim=axis,keepdim=True)
-		lp = lp-(lnorm)
+		# lnorm = lp.logsumexp(dim=axis,keepdim=True)
+		# lp = lp-(lnorm)
 
-		lpsamp = lp * concentration
-		lpsamp = lpsamp - lpsamp.logsumexp(dim=axis, keepdim=True)
+		lpsamp = lp #* concentration
+		# lpsamp = lpsamp - lpsamp.logsumexp(dim=axis, keepdim=True)
 		lpsamp = lpsamp.transpose(0,axis)
 		lp = lp.transpose(0, axis)
 
@@ -818,7 +951,7 @@ class Sampler(MyModule):
 		if mode == 'likelihood' or mode==0:
 			samps, logprob = self.sample_concentrated(inputs, manualrand=manualrand,concentration=concentration)
 		elif mode == 'concentrated_likelihood' or mode==7:
-			samps, logprob = self.sample_concentrated(inputs, manualrand=manualrand,concentration=4)
+			samps, logprob = self.sample_concentrated(inputs, manualrand=manualrand,concentration=1)
 		elif mode == 'sumprob' or mode == 6:
 			samps, logprob = self.sample_manual(inputs, manualrand=manualrand)
 			logprob= -logprob
@@ -854,18 +987,43 @@ class Sampler(MyModule):
 class FullSampler(Sampler):
 	def get_output_prior(self, inputprior=None):
 		unif = 1/inputprior.shape[1]
-		pymnot = (unif - inputprior.exp()+1e-15).log()
+		if (inputprior.exp()> unif).sum()>0:
+			print("shit")
+		pymnot = (torch.max(unif - inputprior.exp(),inputprior.new_zeros(1))).log()
 		outp = torch.cat([inputprior,pymnot],dim=1)
 		return outp
-	def forward(self, inputs,manualrand=None, mode='likelihood',logprob_accumulate=None,concentration=1.0):
+	def forward(self, inputs:Tensor,manualrand=None, mode='likelihood',logprob_accumulate=None,concentration=1.0):
 		unif = 1/inputs.shape[1]
-		inputcomp = (unif - inputs.exp()+1e-15).log()
+		inputcomp = (torch.max(unif - inputs.exp(),inputs.new_zeros(1))).log()
+		if hasnan(inputcomp):
+			print("negative?")
 		inputs = torch.cat([inputs,inputcomp],dim=1)
 		samps, lp = self.sample_manual(inputs,axis=1)
-		return samps.log(),lp
+		return samps.log().detach(),lp
 
-
-
+class RateSampler(Sampler):
+	def get_output_prior(self,inputprior):
+		return inputprior
+	def forward(self, inputs:Tensor,manualrand=None, mode='likelihood',logprob_accumulate=None,concentration=1.0):
+		if not self.training :
+			return self.forward_test(inputs)
+		model_lp = logsigmoid(inputs)
+		model_lp = model_lp#-  max_correction(model_lp,1)
+		samps, lp_sample = self.sample_manual(inputs*0)
+		lp_sample = (model_lp*samps).sum(dim=1,keepdim=True)
+		return (samps).float().detach(), lp_sample
+	def forward_test(self,inputs):
+		model_lp = logsigmoid(inputs)
+		norm = model_lp.logsumexp(dim=1,keepdim=True)
+		samps,lp = self.sample_manual(model_lp)
+		return samps.float(), lp
+	def forward2(self, inputs:Tensor,manualrand=None, mode='likelihood',logprob_accumulate=None,concentration=1.0):
+		lp1 = -softplus(-inputs)
+		lp2 = -softplus(inputs)
+		lp = torch.cat([lp1,lp2],dim=1)
+		lp = lp - math.log(inputs.shape[1])
+		samps, lp_sample = self.sample_manual(lp)
+		return samps.log().detach(), lp_sample
 class PriorSampler(Sampler):
 
 	def forward(self, inputs,manualrand=None, mode='likelihood',logprob_accumulate=None,concentration=1.0):
@@ -881,7 +1039,7 @@ class PriorSampler(Sampler):
 class RejectSampler(Sampler):
 
 	def forward(self, inputs,manualrand=None, mode='likelihood',logprob_accumulate=None,concentration=1.0):
-		inputs = inputs - inputs.max(dim=1,keepdim=True)[0]
+		inputs = inputs - max_correction(inputs,1)
 		inputs = inputs - math.log(inputs.shape[1])
 		reject = (1- inputs.logsumexp(dim=1,keepdim=True).exp()+epsilon).log()
 		samp,lp = self.sample_manual(inputs,axis=1)
@@ -1264,7 +1422,7 @@ class NonFactMarkov(MyModule):
 			self.kernel = Parameter(data=(torch.rand(fnum, inp_chan_sz, kersize, kersize)).log()/math.log(self.kernel.shape[1]))
 		self.register_parameter('kernel', self.kernel)
 	def get_log_kernel(self):
-		k = self.kernel * math.log(self.kernel.shape[1])
+		k = self.get_kernel() * math.log(self.get_kernel().shape[1])
 		return k - LogSumExp.apply(k,0,1)
 	def get_prob_kernel(self):
 		return self.get_log_kernel().exp()
@@ -1754,7 +1912,7 @@ class SpConv(KLConv_Base):
 			self.register_parameter('bias', self.bias)
 
 	def forward(self, x:torch.Tensor):
-		kernel = self.paraminit.get_kernel(self.kernel)
+		kernel = self.paraminit.get_kernel(self.get_kernel())
 		y = self.convwrap(x,kernel)
 		y = y  + self.paraminit.get_kernel(self.bias)
 		return y

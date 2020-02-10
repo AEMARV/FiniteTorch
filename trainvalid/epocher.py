@@ -78,7 +78,7 @@ class Epocher(object):
 		label= label.unsqueeze(0).unsqueeze(2).unsqueeze(3).unsqueeze(4)
 		label = label.transpose(0,1)
 		onehot.scatter_(1,label,1)
-		return onehot
+		return onehot.float()
 
 	def block_grad(self,paramlist:List,ind=None):
 		length = paramlist.__len__()
@@ -117,50 +117,50 @@ class Epocher(object):
 			g = paramlist[i].grad
 			paramlist[i].grad = paramlist[i].grad/ float((math.log(g.shape[1])))
 
-	def deltac_optimization(self,inputs,labels):
+	def deltac_optimization(self,inputs,labels,usemin=False,concentration=1.0):
 		batchsz = inputs.shape[0]
 		iternum= 0
-		usemin=False
-		lprob_currect = 0
+		total_samples= 0
+		total_corrects= 0
+		#TODO
 		sampler = Sampler(blockidx=-1)
 		while True:
+
 			iternum += 1
-			output_temp, lp_mgh, _ = self.model(inputs,mode='delta')
-			#TODO min
-			output,lp_temp = sampler(output_temp,mode='delta')
-			if lp_mgh is not None:
-				lp_temp = self.model.accumulate_lprob(lp_temp,usemin=usemin)
-				lp_mgh = self.model.accumulate_lprob_pair(lp_temp,lp_mgh,usemin=usemin)
+			output_model, lpmgh, stats = self.model(inputs,usemin=usemin,concentration=concentration)
+			output, lprob = sampler(output_model,concentration=concentration)
+			labels_onehot = self.label_to_onehot(output_model,labels)
+			if lpmgh is not None:
+				lprob = self.model.accumulate_lprob(lprob,usemin=usemin)
+				lpmgh= self.model.accumulate_lprob_pair(lprob,lpmgh,usemin=usemin)
 			else:
-				lp_mgh= lp_temp
-			outputlabelsample = output.max(dim=1, keepdim=True)[1]
+				lpmgh= lprob
 
-			# calc accept/reject masks
-			is_oracle = (outputlabelsample.squeeze() == labels).float()
-			lp_ogh = is_oracle.log()
-			lp_deltac_gh = (1-lp_ogh.exp() - lp_mgh.exp()*(1-2*lp_ogh.exp())+definition.epsilon).log()
-			isdeltac = lp_deltac_gh.exp() > torch.rand_like(lp_deltac_gh)
-			to_be_summed = (isdeltac).squeeze().detach()
-
-			if iternum == 1:
-				ret_ldeltac = -lp_deltac_gh.mean().detach()
-				ret_output = output_temp.detach()
-				ret_entropy = lp_mgh.mean().detach()
-
-			#lprob_currect += (((-lp_mgh.squeeze() * (to_be_summed.float())) / batchsz).sum()).detach()
-			lossdc = (-(lp_deltac_gh[to_be_summed].float()).sum())/batchsz #+ (lp_delta_gh[to_be_summed^1].sum())/batchsz
-			loss =   lossdc.sum()
+			isoracle = ((output* labels_onehot).sum(dim=1,keepdim=True)>0).squeeze().float()
+			ismodel= (lpmgh.exp()>torch.rand_like(lpmgh)).float().squeeze()
+			lpmodel = lpmgh*(ismodel.float()) + (1-lpmgh.exp()).log()*(1- ismodel.float())
+			lpstate = lpmodel
+			isdeltac = (ismodel*isoracle + (1-ismodel)*(1-isoracle))>0
+			to_be_summed = isdeltac
+			loss = (-lpstate * (to_be_summed.float())).sum()
+			# loss = -lp_hgm*(2*to_be_summed.float()-1)
+			loss = loss / batchsz
 			definition.hasnan(loss)
 			definition.hasinf(loss)
-			if to_be_summed.float().sum() >0:# 0:
-				pass
-				loss.sum().backward()
-				#break
+			loss.sum().backward()
+			if iternum == 1:
+				ret_output= output_model
+				# ret_output = ret_output-ret_output.logsumexp(dim=1,keepdim=True).detach()
+				ret_output = ret_output.log_softmax(dim=1)# - ret_output.logsumexp(dim=1, keepdim=True).detach()
+				ret_likelihood = self.opts.optimizeropts.loss(ret_output.view(ret_output.shape[0],-1), labels).mean().detach()
+				ret_entropy = -lpmgh.mean().detach()
+				total_samples += float(inputs.shape[0])
+				total_corrects += to_be_summed.sum().float()
 			if to_be_summed.all():
 				break
 			inputs = self.logical_index(inputs, to_be_summed ^ 1)
 			labels = self.logical_index(labels, to_be_summed ^ 1)
-		return ret_ldeltac, ret_output, ret_ldeltac, ret_entropy,None
+		return ret_likelihood,ret_output, total_corrects/total_samples, ret_entropy,stats
 
 	def delta_optimization(self,inputs,labels):
 		batchsz = inputs.shape[0]
@@ -377,21 +377,21 @@ class Epocher(object):
 			to_be_summed = (is_oracle).squeeze().detach()
 
 			if iternum == 1:
-				ret_output= output_model.detach()
+				ret_output= output_model.sigmoid().log().detach()
 				ret_output = ret_output-ret_output.logsumexp(dim=1,keepdim=True).detach()
 				ret_likelihood = self.opts.optimizeropts.loss(ret_output.view(-1, self.opts.dataopts.classnum), labels).mean().detach()
 				ret_entropy = -lp_hgm.mean().detach()
 				total_samples += float(inputs.shape[0])
 				total_corrects += to_be_summed.sum().float()
-			if to_be_summed.float().sum() >0:
-				loss = (-lp_hgm[to_be_summed]).sum()
-				loss = loss / batchsz
-				definition.hasnan(loss)
-				definition.hasinf(loss)
-				loss.backward()
-
-			if to_be_summed.all():
+			loss = (-lp_hgm * (to_be_summed.float())).sum()
+			loss = loss / batchsz
+			definition.hasnan(loss)
+			definition.hasinf(loss)
+			loss.backward()
+			if(to_be_summed.all()):
 				break
+
+			# break
 			inputs = self.logical_index(inputs, to_be_summed ^ 1)
 			labels = self.logical_index(labels, to_be_summed ^ 1)
 		# print(stats['jsd'],end='')
@@ -696,7 +696,6 @@ class Epocher(object):
 
 		# TODO: Train on batches
 		for batch_n,data in enumerate(self.trainloader):
-
 			inputs, labels = data
 			inputs, labels = inputs.to(self.opts.epocheropts.device),labels.to(self.opts.epocheropts.device)
 			if batch_n ==0:
@@ -793,7 +792,7 @@ class Epocher(object):
 					trials = 10
 				for i in range(trials):
 					output_temp,logprob,model_prob = self.model(inputs)
-					output_temp = output_temp-output_temp.logsumexp(dim=1,keepdim=True)
+					output_temp = output_temp.log_softmax(dim=1)
 					if i==0:
 						output = output_temp
 					else:
@@ -801,7 +800,7 @@ class Epocher(object):
 
 				output = (output -math.log(trials))
 
-				output = output.view(-1, self.opts.dataopts.classnum)
+				output = output.view(output.shape[0], -1)
 				#TODO: Print Batch Statistics
 				predlab = torch.argmax(output, 1, keepdim=False).squeeze()
 				accthis = (predlab == labels).sum().item()

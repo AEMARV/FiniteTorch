@@ -17,7 +17,6 @@ import math
 import random
 import definition
 
-
 class LogSumExp(Function):
 	''' Takes log sum exp along axis 1'''
 	@staticmethod
@@ -82,11 +81,18 @@ def max_correction(tensor,dim):
 	max = tensor.max(dim=dim,keepdim=True)[0]
 	max_inds = (tensor == max).float()
 	max_inds = max_inds/max_inds.sum(dim=dim,keepdim=True)
-	max_inds = sample_manual(max_inds.log(), dim,1)[0]
 	max = (tensor*max_inds)
 	max[max != max] = float(0)
 	max = max.sum(dim=dim, keepdim=True)
 	return max
+def softplus(tensor:Tensor)->Tensor:
+	''' ln(1+ e^t)'''
+	max = tensor.clamp_min(0)
+	ret = ((-max).exp()+ (tensor-max).exp()).log()
+	ret = ret + max
+	return ret
+def logsigmoid(inputs:Tensor)->Tensor:
+	return -softplus(-inputs)
 def min_correction(tensor,dim):
 	min = -max_correction(-tensor,dim)
 	return min
